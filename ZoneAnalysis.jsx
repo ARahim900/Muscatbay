@@ -1,4 +1,5 @@
 
+// ZoneAnalysis v1.1 - Fixed KPI calculations: Zone Bulk (L2 only), Individual (L3 only), Loss (L2-L3)
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1000,6 +1001,20 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
     
     // Water Loss = Difference = L2(zone Bulk) - L3(total)
     const loss = zoneBulk - individualSum;
+    
+    // Debug logging to help troubleshoot data issues
+    if (selectedZone === "Zone_01_(FM)" && selectedMonth === "Jan-25") {
+      console.log("Zone Analysis Debug:", {
+        selectedZone,
+        selectedMonth,
+        rec,
+        zoneBulk,
+        individualSum,
+        loss,
+        l2Meters: meters.filter(m => m.zone === selectedZone && isL2(m)),
+        l3Meters: meters.filter(m => m.zone === selectedZone && isL3(m))
+      });
+    }
     const rawLossPct = zoneBulk > 0 ? loss / zoneBulk * 100 : 0;
     const lossPercentage = rawLossPct.toFixed(1);
     const efficiency = zoneBulk > 0 ? Math.max(0, Math.min(100, individualSum / zoneBulk * 100)).toFixed(1) : "0.0";
@@ -1147,11 +1162,11 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
         />
         <GaugeCard
           title="Water Loss Distribution"
-          value={Math.abs(metrics.loss)}
+          value={metrics.loss}
           unit="m³"
           percent={Math.abs(Number(metrics.lossPercentage))}
-          color="#dc2626"
-          description="Unaccounted for water"
+          color={metrics.loss >= 0 ? "#dc2626" : "#10b981"}
+          description={metrics.loss >= 0 ? "Unaccounted for water" : "System gain (L3 > L2)"}
         />
       </div>
 
