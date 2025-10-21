@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, Legend, BarChart, Bar, CartesianGrid, Cell } from "recharts";
-import { BarChart3, TrendingUp, TestTube2, Database, Droplets, ArrowRightLeft, ChevronsRight, Users, Minus, AlertTriangle } from "lucide-react";
+import { BarChart3, TrendingUp, TestTube2, Database, Droplets, ArrowRightLeft, ChevronsRight, Users, Minus, AlertTriangle, ChevronDown, ChevronRight, ListTree, Layers, Filter, Search } from "lucide-react";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 
@@ -44,6 +44,11 @@ export default function Water() {
   const [lossFilter, setLossFilter] = useState("loss_all");
   const [sliderRange, setSliderRange] = useState([1, 8]);
   const [filterType, setFilterType] = useState('all'); // NEW: type filter for Consumption by Type
+  const [databaseSearch, setDatabaseSearch] = useState('');
+  const [databaseLevelFilter, setDatabaseLevelFilter] = useState('all');
+  const [hierarchySearch, setHierarchySearch] = useState('');
+  const [hierarchyLevelFilter, setHierarchyLevelFilter] = useState('all');
+  const [expandedNodes, setExpandedNodes] = useState(['root']);
 
   // Daily analysis state
   const [dailyRecords, setDailyRecords] = useState([]);
@@ -560,11 +565,409 @@ export default function Water() {
       .sort();
   }, [dailyRecords, selectedMonthKey, activeView]);
 
+  const rangeLabel = useMemo(() => {
+    const formatMonth = (ym) => {
+      if (!ym) return '';
+      const [year, month] = ym.split('-');
+      if (!year || !month) return ym;
+      try {
+        const d = new Date(`${year}-${month}-01T00:00:00`);
+        return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      } catch (error) {
+        console.warn('Failed to format range month', ym, error);
+        return ym;
+      }
+    };
+    return `${formatMonth(startDate)} - ${formatMonth(endDate)}`;
+  }, [startDate, endDate]);
+
+  const databaseOverviewStats = useMemo(() => {
+    if (!Array.isArray(meters) || meters.length === 0) return [];
+
+    const totalConsumption = meters.reduce((sum, meter) => sum + sumWaterMeterInRange(meter), 0);
+    const meterCount = meters.length;
+    const averageConsumption = meterCount > 0 ? totalConsumption / meterCount : 0;
+    const mainSourceCount = meters.filter(meter => meter.level === 'L1').length;
+
+    return [
+      {
+        label: 'TOTAL METERS',
+        value: meterCount.toLocaleString(),
+        subtitle: 'Tracked across all hierarchy levels',
+        icon: Database
+      },
+      {
+        label: 'TOTAL CONSUMPTION',
+        value: `${Math.round(totalConsumption).toLocaleString()} m³`,
+        subtitle: rangeLabel,
+        icon: Droplets
+      },
+      {
+        label: 'AVERAGE PER METER',
+        value: `${Math.round(averageConsumption).toLocaleString()} m³`,
+        subtitle: 'Selected period average',
+        icon: TrendingUp
+      },
+      {
+        label: 'MAIN SOURCE METERS',
+        value: mainSourceCount.toString(),
+        subtitle: 'Level 1 monitoring points',
+        icon: ChevronsRight
+      }
+    ];
+  }, [meters, rangeLabel, sumWaterMeterInRange]);
+
+  const levelBreakdownStats = useMemo(() => {
+    if (!Array.isArray(meters) || meters.length === 0) return [];
+
+    const levelOrder = ['L1', 'L2', 'L3', 'L4', 'DC'];
+    const metadata = {
+      L1: { label: 'L1 • Main Source', icon: Droplets },
+      L2: { label: 'L2 • Zone Bulks', icon: ChevronsRight },
+      L3: { label: 'L3 • Secondary Distribution', icon: Layers },
+      L4: { label: 'L4 • End Users', icon: Users },
+      DC: { label: 'Direct Connections', icon: AlertTriangle },
+      Unknown: { label: 'Unassigned Level', icon: Database }
+    };
+
+    const grouped = meters.reduce((acc, meter) => {
+      const level = meter.level || 'Unknown';
+      if (!acc[level]) {
+        acc[level] = { count: 0, consumption: 0 };
+      }
+      acc[level].count += 1;
+      acc[level].consumption += sumWaterMeterInRange(meter);
+      return acc;
+    }, {});
+
+    const stats = levelOrder
+      .filter(level => grouped[level])
+      .map(level => ({
+        label: metadata[level].label,
+        value: grouped[level].count.toLocaleString(),
+        subtitle: `${Math.round(grouped[level].consumption).toLocaleString()} m³`,
+        icon: metadata[level].icon
+      }));
+
+    if (grouped.Unknown) {
+      stats.push({
+        label: metadata.Unknown.label,
+        value: grouped.Unknown.count.toLocaleString(),
+        subtitle: `${Math.round(grouped.Unknown.consumption).toLocaleString()} m³`,
+        icon: metadata.Unknown.icon
+      });
+    }
+
+    return stats;
+  }, [meters, sumWaterMeterInRange]);
+
+  const filteredDatabaseMeters = useMemo(() => {
+    if (!Array.isArray(meters) || meters.length === 0) return [];
+    const query = databaseSearch.trim().toLowerCase();
+    const levelFilter = databaseLevelFilter === 'all' ? null : databaseLevelFilter;
+
+    return meters
+      .filter(meter => {
+        const matchesLevel = !levelFilter || (meter.level || '').toUpperCase() === levelFilter;
+        if (!matchesLevel) return false;
+
+        if (!query) return true;
+
+        const haystacks = [
+          meter.meter_label,
+          meter.account_number,
+          meter.zone,
+          meter.parent_meter,
+          meter.meter_type
+        ];
+
+        return haystacks.some(value => typeof value === 'string' && value.toLowerCase().includes(query));
+      })
+      .map(meter => ({
+        ...meter,
+        consumption: sumWaterMeterInRange(meter)
+      }))
+      .sort((a, b) => b.consumption - a.consumption);
+  }, [meters, databaseSearch, databaseLevelFilter, sumWaterMeterInRange]);
+
+  const { root: hierarchyRoot, metricsMap: hierarchyMetricsMap } = useMemo(() => {
+    if (!Array.isArray(meters) || meters.length === 0) {
+      return { root: null, metricsMap: new Map() };
+    }
+
+    const nodeMap = new Map();
+
+    meters.forEach((meter) => {
+      const id = meter.id || meter.meter_label;
+      nodeMap.set(id, {
+        id,
+        meter,
+        label: meter.meter_label,
+        level: meter.level || 'Unknown',
+        zone: meter.zone,
+        type: meter.meter_type,
+        parent: null,
+        children: []
+      });
+    });
+
+    const findParent = (parentKey) => {
+      if (!parentKey) return null;
+      for (const node of nodeMap.values()) {
+        if (!node.meter) continue;
+        if (node.meter.id === parentKey || node.meter.meter_label === parentKey) {
+          return node;
+        }
+      }
+      return null;
+    };
+
+    nodeMap.forEach((node) => {
+      const parentNode = findParent(node.meter?.parent_meter);
+      if (parentNode) {
+        node.parent = parentNode;
+        parentNode.children.push(node);
+      }
+    });
+
+    const sortChildren = (node) => {
+      if (!node.children) return;
+      node.children.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+      node.children.forEach(sortChildren);
+    };
+    nodeMap.forEach(sortChildren);
+
+    const reorganizeNode = (node) => {
+      if (!node || !Array.isArray(node.children) || node.level === 'group') {
+        node?.children?.forEach(reorganizeNode);
+        return;
+      }
+
+      node.children.forEach(reorganizeNode);
+
+      const zoneChildren = node.children.filter(child => child.level === 'L2');
+      const dcChildren = node.children.filter(child => child.level === 'DC');
+      const otherChildren = node.children.filter(child => child.level !== 'L2' && child.level !== 'DC');
+
+      const groupedChildren = [];
+
+      if (zoneChildren.length) {
+        groupedChildren.push({
+          id: `${node.id}-zone-group`,
+          label: 'Zone Bulks',
+          level: 'group',
+          children: zoneChildren
+        });
+      }
+
+      if (dcChildren.length) {
+        groupedChildren.push({
+          id: `${node.id}-dc-group`,
+          label: 'Direct Connections',
+          level: 'group',
+          children: dcChildren
+        });
+      }
+
+      groupedChildren.push(...otherChildren);
+
+      node.children = groupedChildren;
+    };
+
+    const mainNodes = Array.from(nodeMap.values()).filter(node => node.level === 'L1');
+    const roots = mainNodes.length > 0
+      ? mainNodes
+      : Array.from(nodeMap.values()).filter(node => !node.parent);
+
+    roots.forEach(reorganizeNode);
+
+    const root = {
+      id: 'root',
+      label: 'Muscat Bay Water System',
+      level: 'root',
+      children: [...roots]
+    };
+
+    const zoneNodes = Array.from(nodeMap.values()).filter(node => node.level === 'L2');
+    const dcNodes = Array.from(nodeMap.values()).filter(node => node.level === 'DC');
+
+    const orphanZones = zoneNodes.filter(node => !node.parent);
+    if (orphanZones.length) {
+      root.children.push({
+        id: 'root-zone-group',
+        label: 'Zone Bulks',
+        level: 'group',
+        children: orphanZones
+      });
+    }
+
+    const orphanDC = dcNodes.filter(node => !node.parent);
+    if (orphanDC.length) {
+      root.children.push({
+        id: 'root-dc-group',
+        label: 'Direct Connections',
+        level: 'group',
+        children: orphanDC
+      });
+    }
+
+    const metricsMap = new Map();
+
+    const computeMetrics = (node) => {
+      const childMetrics = (node.children || []).map(computeMetrics);
+      const childrenConsumption = childMetrics.reduce((sum, child) => sum + child.totalConsumption, 0);
+      const meterConsumption = node.meter ? sumWaterMeterInRange(node.meter) : 0;
+      const totalConsumption = node.meter ? meterConsumption : childrenConsumption;
+      const hasChildren = childMetrics.length > 0;
+      const lossVolume = node.meter
+        ? (hasChildren ? meterConsumption - childrenConsumption : 0)
+        : childMetrics.reduce((sum, child) => sum + child.lossVolume, 0);
+      const meterCount = node.meter ? 1 : childMetrics.reduce((sum, child) => sum + child.meterCount, 0);
+
+      const computedNode = {
+        ...node,
+        children: childMetrics,
+        ownConsumption: meterConsumption,
+        totalConsumption,
+        lossVolume,
+        lossPercent: totalConsumption !== 0 ? Number(((lossVolume / totalConsumption) * 100).toFixed(1)) : 0,
+        meterCount,
+        status: lossVolume > 0 ? 'Loss' : lossVolume < 0 ? 'Gain' : 'Balanced'
+      };
+
+      metricsMap.set(node.id, computedNode);
+      return computedNode;
+    };
+
+    const computedRoot = computeMetrics(root);
+
+    return { root: computedRoot, metricsMap };
+  }, [meters, sumWaterMeterInRange]);
+
+  const hierarchySummaryStats = useMemo(() => {
+    if (!hierarchyMetricsMap || hierarchyMetricsMap.size === 0) return [];
+
+    const metricsValues = Array.from(hierarchyMetricsMap.values());
+    const levelSum = (level) => metricsValues
+      .filter(node => node.level === level)
+      .reduce((sum, node) => sum + node.totalConsumption, 0);
+    const levelCount = (level) => metricsValues.filter(node => node.level === level).length;
+
+    const mainBulk = levelSum('L1');
+    const zoneBulk = levelSum('L2');
+    const directConnections = levelSum('DC');
+    const mainDistributionLoss = mainBulk - (zoneBulk + directConnections);
+    const lossPercent = mainBulk !== 0 ? Math.abs((mainDistributionLoss / mainBulk) * 100) : 0;
+
+    return [
+      {
+        label: 'MAIN BULK INPUT',
+        value: `${Math.round(mainBulk).toLocaleString()} m³`,
+        subtitle: `${levelCount('L1')} L1 meter${levelCount('L1') === 1 ? '' : 's'}`,
+        icon: Droplets
+      },
+      {
+        label: 'DIRECT CONNECTIONS',
+        value: `${Math.round(directConnections).toLocaleString()} m³`,
+        subtitle: `${levelCount('DC')} connections`,
+        icon: Database
+      },
+      {
+        label: 'ZONE BULKS',
+        value: `${Math.round(zoneBulk).toLocaleString()} m³`,
+        subtitle: `${levelCount('L2')} active zones`,
+        icon: ChevronsRight
+      },
+      {
+        label: 'MAIN DISTRIBUTION LOSS',
+        value: `${mainDistributionLoss >= 0 ? '' : '-'}${Math.round(Math.abs(mainDistributionLoss)).toLocaleString()} m³`,
+        subtitle: `${lossPercent.toFixed(1)}% ${mainDistributionLoss >= 0 ? 'Loss' : 'Gain'} vs A1`,
+        icon: AlertTriangle
+      }
+    ];
+  }, [hierarchyMetricsMap]);
+
+  const hierarchyZoneBarData = useMemo(() => {
+    if (!hierarchyMetricsMap || hierarchyMetricsMap.size === 0) return [];
+
+    return Array.from(hierarchyMetricsMap.values())
+      .filter(node => node.level === 'L2')
+      .map(node => ({
+        label: node.label,
+        consumption: Math.round(node.totalConsumption),
+        loss: Math.round(Math.abs(node.lossVolume))
+      }))
+      .sort((a, b) => b.consumption - a.consumption)
+      .slice(0, 10);
+  }, [hierarchyMetricsMap]);
+
+  const filteredHierarchy = useMemo(() => {
+    if (!hierarchyRoot) return null;
+
+    const query = hierarchySearch.trim().toLowerCase();
+    const levelFilter = hierarchyLevelFilter === 'all' ? null : hierarchyLevelFilter;
+
+    const filterNode = (node) => {
+      const matchesQuery = !query || [node.label, node.zone, node.type]
+        .some(value => typeof value === 'string' && value.toLowerCase().includes(query));
+      const matchesLevel = !levelFilter || node.level === levelFilter || node.level === 'root' || node.level === 'group';
+
+      const filteredChildren = (node.children || [])
+        .map(filterNode)
+        .filter(Boolean);
+
+      if ((matchesQuery && matchesLevel) || filteredChildren.length > 0) {
+        return { ...node, children: filteredChildren };
+      }
+      return null;
+    };
+
+    return filterNode(hierarchyRoot);
+  }, [hierarchyRoot, hierarchyLevelFilter, hierarchySearch]);
+
+  const toggleNode = useCallback((nodeId) => {
+    setExpandedNodes((prev) => (
+      prev.includes(nodeId)
+        ? prev.filter((id) => id !== nodeId)
+        : [...prev, nodeId]
+    ));
+  }, []);
+
+  useEffect(() => {
+    if (!filteredHierarchy) return;
+
+    const defaultExpandedIds = new Set();
+    const collect = (node) => {
+      if (!node) return;
+      if (node.level === 'group' || node.level === 'root') {
+        defaultExpandedIds.add(node.id || node.label);
+      }
+      (node.children || []).forEach(collect);
+    };
+
+    collect(filteredHierarchy);
+
+    if (defaultExpandedIds.size === 0) return;
+
+    setExpandedNodes((prev) => {
+      const merged = new Set(prev);
+      let changed = false;
+      defaultExpandedIds.forEach((id) => {
+        if (id && !merged.has(id)) {
+          merged.add(id);
+          changed = true;
+        }
+      });
+      return changed ? Array.from(merged) : prev;
+    });
+  }, [filteredHierarchy]);
+
   const tabs = [
     { key: 'overview', label: 'Overview', icon: BarChart3 },
     { key: 'performance', label: 'Performance KPIs', icon: TrendingUp },
     { key: 'zone', label: 'Zone Analysis', icon: TestTube2 },
     { key: 'consumption', label: 'Consumption by Type', icon: BarChart3 },
+    { key: 'hierarchy', label: 'Water Hierarchy', icon: ListTree },
     { key: 'database', label: 'Main Database', icon: Database }
   ];
 
@@ -1023,70 +1426,298 @@ export default function Water() {
   };
 
   const renderDatabaseView = () => (
-    <Card className="bg-white dark:bg-gray-800 shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-gray-900 dark:text-white">Water Meter Database</CardTitle>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Complete meter inventory with consumption data</p>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                <TableHead className="text-gray-900 dark:text-white">Meter Label</TableHead>
-                <TableHead className="text-gray-900 dark:text-white">Acct #</TableHead>
-                <TableHead className="text-gray-900 dark:text-white">Level</TableHead>
-                <TableHead className="text-gray-900 dark:text-white">Zone</TableHead>
-                <TableHead className="text-gray-900 dark:text-white">Parent Meter</TableHead>
-                <TableHead className="text-gray-900 dark:text-white">Type</TableHead>
-                <TableHead className="text-gray-900 dark:text-white text-right">Jul-25</TableHead>
-                <TableHead className="text-gray-900 dark:text-white text-right">Aug-25</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {meters.slice(0, 20).map((meter) => (
-                <TableRow key={meter.id || meter.meter_label} className="text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                  <TableCell className="font-medium">{meter.meter_label}</TableCell>
-                  <TableCell>{meter.account_number}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded text-xs font-medium
-                      ${meter.level === 'L1' ? 'bg-blue-100 text-blue-800' : ''}
-                      ${meter.level === 'L2' ? 'bg-green-100 text-green-800' : ''}
-                      ${meter.level === 'L3' ? 'bg-yellow-100 text-yellow-800' : ''}
-                      ${meter.level === 'L4' ? 'bg-purple-100 text-purple-800' : ''}
-                      ${meter.level === 'DC' ? 'bg-red-100 text-red-800' : ''}
-                    `}>
-                      {meter.level}
-                    </span>
-                  </TableCell>
-                  <TableCell>{meter.zone}</TableCell>
-                  <TableCell className="max-w-xs truncate">{meter.parent_meter}</TableCell>
-                  <TableCell>{meter.meter_type}</TableCell>
-                  <TableCell className="text-right">
-                    {meter.readings?.['Jul-25'] ? Number(meter.readings['Jul-25']).toLocaleString() : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {meter.readings?.['Aug-25'] ? Number(meter.readings['Aug-25']).toLocaleString() : '-'}
-                  </TableCell>
+    <div className="space-y-6">
+      <StatsGrid stats={databaseOverviewStats} />
+
+      <Card className="bg-white dark:bg-gray-800 shadow-lg">
+        <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="relative w-full md:w-1/2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              value={databaseSearch}
+              onChange={(event) => setDatabaseSearch(event.target.value)}
+              placeholder="Search by label, account, zone, or parent meter"
+              className="pl-9 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-400" />
+            {['all', 'L1', 'L2', 'L3', 'L4', 'DC'].map((level) => (
+              <Button
+                key={level}
+                variant={databaseLevelFilter === level ? 'default' : 'outline'}
+                onClick={() => setDatabaseLevelFilter(level)}
+                className={`${databaseLevelFilter === level ? 'bg-[var(--accent)] text-white' : 'dark:bg-gray-700 dark:border-gray-600 dark:text-white'}`}
+              >
+                {level === 'all' ? 'All Levels' : level}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {levelBreakdownStats.length > 0 && <StatsGrid stats={levelBreakdownStats} />}
+
+      <Card className="bg-white dark:bg-gray-800 shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-gray-900 dark:text-white">Water Meter Database</CardTitle>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Comprehensive inventory with hierarchy-aware loss tracking</p>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <TableHead className="text-gray-900 dark:text-white">Meter Label</TableHead>
+                  <TableHead className="text-gray-900 dark:text-white">Account #</TableHead>
+                  <TableHead className="text-gray-900 dark:text-white">Level</TableHead>
+                  <TableHead className="text-gray-900 dark:text-white">Zone</TableHead>
+                  <TableHead className="text-gray-900 dark:text-white">Parent Meter</TableHead>
+                  <TableHead className="text-gray-900 dark:text-white">Type</TableHead>
+                  <TableHead className="text-gray-900 dark:text-white text-right">Consumption ({rangeLabel})</TableHead>
+                  <TableHead className="text-gray-900 dark:text-white text-right">Loss / Gain</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredDatabaseMeters.map((meter) => {
+                  const nodeMetric = hierarchyMetricsMap.get(meter.id || meter.meter_label);
+                  const lossVolume = nodeMetric ? nodeMetric.lossVolume : 0;
+                  const lossPercent = nodeMetric ? Math.abs(nodeMetric.lossPercent || 0) : 0;
+                  const lossStatus = lossVolume >= 0 ? 'Loss' : 'Gain';
+
+                  return (
+                    <TableRow key={meter.id || meter.meter_label} className="text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <TableCell className="font-medium">{meter.meter_label}</TableCell>
+                      <TableCell>{meter.account_number || '—'}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded text-xs font-medium
+                          ${meter.level === 'L1' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/10 dark:text-blue-300' : ''}
+                          ${meter.level === 'L2' ? 'bg-green-100 text-green-800 dark:bg-green-500/10 dark:text-green-300' : ''}
+                          ${meter.level === 'L3' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/10 dark:text-yellow-300' : ''}
+                          ${meter.level === 'L4' ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/10 dark:text-purple-300' : ''}
+                          ${meter.level === 'DC' ? 'bg-red-100 text-red-800 dark:bg-red-500/10 dark:text-red-300' : ''}
+                        `}>
+                          {meter.level || '—'}
+                        </span>
+                      </TableCell>
+                      <TableCell>{meter.zone || '—'}</TableCell>
+                      <TableCell className="max-w-xs truncate">{meter.parent_meter || '—'}</TableCell>
+                      <TableCell>{meter.meter_type || '—'}</TableCell>
+                      <TableCell className="text-right">{Math.round(meter.consumption).toLocaleString()} m³</TableCell>
+                      <TableCell className={`text-right ${lossVolume >= 0 ? 'text-red-600' : 'text-emerald-500'}`}>
+                        {nodeMetric
+                          ? `${lossVolume >= 0 ? '' : '-'}${Math.round(Math.abs(lossVolume)).toLocaleString()} m³ (${lossPercent.toFixed(1)}%) ${lossStatus}`
+                          : '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {filteredDatabaseMeters.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-gray-500 dark:text-gray-400">
+                      No meters found for the current filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="mt-6">
+            <iframe
+              className="airtable-embed"
+              src="https://airtable.com/embed/appwGy1JHL1UYsO2W/shrjjfauKyS0ABUfM?viewControls=on"
+              frameBorder="0"
+              width="100%"
+              height="533"
+              style={{ background: 'transparent', border: '1px solid #ccc' }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const levelBadgeClasses = {
+    root: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+    group: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+    L1: 'bg-blue-100 text-blue-800 dark:bg-blue-500/10 dark:text-blue-300',
+    L2: 'bg-green-100 text-green-800 dark:bg-green-500/10 dark:text-green-300',
+    L3: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/10 dark:text-yellow-300',
+    L4: 'bg-purple-100 text-purple-800 dark:bg-purple-500/10 dark:text-purple-300',
+    DC: 'bg-red-100 text-red-800 dark:bg-red-500/10 dark:text-red-300'
+  };
+
+  const formatSignedVolume = (value) => `${value >= 0 ? '' : '-'}${Math.round(Math.abs(value)).toLocaleString()} m³`;
+
+  const renderHierarchyNode = (node, depth = 0) => {
+    if (!node) return null;
+    const nodeId = node.id || `${node.label}-${depth}`;
+    const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+    const searchActive = hierarchySearch.trim().length > 0;
+    const isExpanded = searchActive || node.level === 'group' || node.level === 'root' || expandedNodes.includes(nodeId);
+    const lossPercentLabel = node.lossPercent ? `(${Math.abs(node.lossPercent).toFixed(1)}%)` : '(0.0%)';
+    const badgeClass = levelBadgeClasses[node.level] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+    const statusClass = node.lossVolume >= 0
+      ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300'
+      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300';
+
+    return (
+      <div key={nodeId} className="space-y-3" style={{ marginLeft: depth * 16 }}>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm">
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleNode(nodeId)}
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                ) : (
+                  <span className="inline-flex h-2 w-2 rounded-full bg-[var(--accent)]/80" />
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">{node.label}</p>
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${badgeClass}`}>
+                      {node.level === 'group' ? 'Group' : node.level === 'root' ? 'System' : node.level}
+                    </span>
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusClass}`}>
+                      {node.status || 'Balanced'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {node.zone && <span>Zone: {node.zone}</span>}
+                    {node.type && <span>Type: {node.type}</span>}
+                    {node.meter?.account_number && <span>Acct: {node.meter.account_number}</span>}
+                    {hasChildren && <span>{node.meterCount} meter{node.meterCount === 1 ? '' : 's'}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right text-sm">
+                <div className="font-semibold text-gray-900 dark:text-gray-100">
+                  Consumption: {formatSignedVolume(node.totalConsumption)}
+                </div>
+                {node.level !== 'group' && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {node.meter ? (node.lossVolume >= 0 ? 'Loss' : 'Gain') : 'Aggregated'} {lossPercentLabel}
+                  </div>
+                )}
+                {node.level !== 'group' && (
+                  <div className={`text-sm font-medium ${node.lossVolume >= 0 ? 'text-red-600' : 'text-emerald-500'}`}>
+                    {formatSignedVolume(node.lossVolume)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-6">
-          <iframe
-            className="airtable-embed"
-            src="https://airtable.com/embed/appwGy1JHL1UYsO2W/shrjjfauKyS0ABUfM?viewControls=on"
-            frameBorder="0"
-            width="100%"
-            height="533"
-            style={{ background: "transparent", border: "1px solid #ccc" }}
-          />
-        </div>
-      </CardContent>
-    </Card>
-  );
+        {hasChildren && isExpanded && (
+          <div className="space-y-3">
+            {node.children.map((child) => renderHierarchyNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderHierarchy = () => {
+    if (!filteredHierarchy) {
+      return (
+        <Card className="bg-white dark:bg-gray-800 shadow-sm">
+          <CardContent className="p-10 text-center text-gray-500 dark:text-gray-400">
+            No hierarchy data available for the selected range.
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const nodesToRender = filteredHierarchy.level === 'root'
+      ? filteredHierarchy.children || []
+      : [filteredHierarchy];
+
+    return (
+      <div className="space-y-6">
+        {hierarchySummaryStats.length > 0 && <StatsGrid stats={hierarchySummaryStats} />}
+
+        <Card className="bg-white dark:bg-gray-800 shadow-lg">
+          <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="relative w-full md:w-1/2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                value={hierarchySearch}
+                onChange={(event) => setHierarchySearch(event.target.value)}
+                placeholder="Search meters, zones, or connections"
+                className="pl-9 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Filter className="h-4 w-4 text-gray-400" />
+              {['all', 'L1', 'L2', 'L3', 'L4', 'DC'].map((level) => (
+                <Button
+                  key={level}
+                  variant={hierarchyLevelFilter === level ? 'default' : 'outline'}
+                  onClick={() => setHierarchyLevelFilter(level)}
+                  className={`${hierarchyLevelFilter === level ? 'bg-[var(--accent)] text-white' : 'dark:bg-gray-700 dark:border-gray-600 dark:text-white'}`}
+                >
+                  {level === 'all' ? 'All Levels' : level}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white dark:bg-gray-800 shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <ListTree className="h-5 w-5 text-[var(--accent)]" />
+              Water Distribution Hierarchy
+            </CardTitle>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Visualizing meter relationships from Main Bulk through Direct Connections and Zone Bulks.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {nodesToRender.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No matching nodes for the current filters.</p>
+              ) : (
+                nodesToRender.map((node) => renderHierarchyNode(node))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {hierarchyZoneBarData.length > 0 && (
+          <Card className="bg-white dark:bg-gray-800 shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-white">Zone Bulk Consumption & Loss</CardTitle>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Top zones by consumption with associated loss volumes.</p>
+            </CardHeader>
+            <CardContent className="h-96">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hierarchyZoneBarData} margin={{ left: 20, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} angle={-15} textAnchor="end" height={60} />
+                  <YAxis tickFormatter={(value) => `${Math.round(value / 1000)}k`} />
+                  <Tooltip
+                    formatter={(value, key) => [`${Math.round(value).toLocaleString()} m³`, key === 'consumption' ? 'Consumption' : 'Loss']}
+                  />
+                  <Legend />
+                  <Bar dataKey="consumption" name="Consumption" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="loss" name="Loss" fill="#f97316" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  };
 
   const renderZone = () => (
     <ZoneAnalysis meters={meters} startDate={startDate} endDate={endDate} />
@@ -1399,6 +2030,7 @@ export default function Water() {
               {activeTab === 'overview' && renderOverview()}
               {activeTab === 'performance' && renderPerformance()}
               {activeTab === 'consumption' && renderConsumption()}
+              {activeTab === 'hierarchy' && renderHierarchy()}
               {activeTab === 'zone' && renderZone()}
               {activeTab === 'database' && renderDatabaseView()}
             </>
