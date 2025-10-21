@@ -1,15 +1,15 @@
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Meter } from "@/api/entities";
+import { Meter } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { BarChart3, TrendingUp, Database, Zap, DollarSign, MapPin } from "lucide-react";
-import TabNavigation from "../components/shared/TabNavigation";
-import DateRangePicker from "../components/shared/DateRangePicker";
-import StatsGrid from "../components/shared/StatsGrid";
+import TabNavigation from "@/components/TabNavigation";
+import DateRangePicker from "@/components/DateRangePicker";
+import StatsGrid from "@/components/StatsGrid";
 
 export default function Electricity() {
   const [activeTab, setActiveTab] = useState('overview');

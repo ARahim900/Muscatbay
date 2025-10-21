@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Contractor } from "@/api/entities";
-import { Contract } from "@/api/entities";
+import { Contractor } from "@/lib/entities";
+import { Contract } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Users, DollarSign, AlertTriangle, FileText, Search, Edit, Save, X, Chec
 import { format, parse } from "date-fns";
 import { Textarea } from "@/components/ui/textarea";
 
-import StatsGrid from "../components/shared/StatsGrid";
+import StatsGrid from "@/components/StatsGrid";
 
 export default function Contractors() {
   const [contractors, setContractors] = useState([]);

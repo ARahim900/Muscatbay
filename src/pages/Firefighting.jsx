@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FireSafetyEquipment } from "@/api/entities";
+import { FireSafetyEquipment } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 import { ShieldCheck, HardHat, AlertTriangle, Wrench, Search, Edit, Save, X, CheckCircle, AlertCircle, Plus, Building, Calendar, User, Settings } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
 
-import TabNavigation from "../components/shared/TabNavigation";
-import StatsGrid from "../components/shared/StatsGrid";
+import TabNavigation from "@/components/TabNavigation";
+import StatsGrid from "@/components/StatsGrid";
 
 const statusConfig = {
   Operational: { color: "var(--color-success)", icon: ShieldCheck },

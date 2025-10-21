@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { STPOperation } from "@/api/entities";
+import { STPOperation } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Settings, Droplets, TrendingUp, DollarSign, Truck, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
-import StatsGrid from "../components/shared/StatsGrid";
+import StatsGrid from "@/components/StatsGrid";
 
 // Enhanced Custom Dropdown Component
 const CustomMonthDropdown = ({ selectedMonth, onMonthChange, availableMonths }) => {
