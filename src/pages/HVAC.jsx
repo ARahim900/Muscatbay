@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from "react";
-import { HvacMaintenanceLog } from "@/api/entities";
-import { MaintenanceSchedule } from "@/api/entities";
-import { MaintenanceHistory } from "@/api/entities";
+import { HvacMaintenanceLog } from "@/lib/entities";
+import { MaintenanceSchedule } from "@/lib/entities";
+import { MaintenanceHistory } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 
-import TabNavigation from "../components/shared/TabNavigation";
-import StatsGrid from "../components/shared/StatsGrid";
+import TabNavigation from "@/components/TabNavigation";
+import StatsGrid from "@/components/StatsGrid";
 
 export default function HVAC() {
   // Core state

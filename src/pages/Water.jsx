@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { WaterMeter } from "@/api/entities";
-import { DailyWaterReading } from "@/api/entities";
+import { WaterMeter } from "@/lib/entities";
+import { DailyWaterReading } from "@/lib/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,19 +10,19 @@ import { BarChart3, TrendingUp, TestTube2, Database, Droplets, ArrowRightLeft, C
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 
-import TabNavigation from "../components/shared/TabNavigation";
-import FilterTabs from "../components/shared/FilterTabs";
-import ZoneAnalysis from "../components/water/ZoneAnalysis";
-import StatsGrid from "../components/shared/StatsGrid";
-import WaterSystemToggle from "../components/water/WaterSystemToggle";
+import TabNavigation from "@/components/TabNavigation";
+import FilterTabs from "@/components/FilterTabs";
+import ZoneAnalysis from "@/components/ZoneAnalysis";
+import StatsGrid from "@/components/StatsGrid";
+import WaterSystemToggle from "@/components/WaterSystemToggle";
 
 // Import Daily Analysis components
-import FilterControls from "../components/water/daily/FilterControls";
-import ConsumptionGauges from "../components/water/daily/ConsumptionGauges";
-import ConsumptionTrendChart from "../components/water/daily/ConsumptionTrendChart";
-import KpiCards from "../components/water/daily/KpiCards";
-import AnomalyReport from "../components/water/daily/AnomalyReport";
-import ConsumptionTable from "../components/water/daily/ConsumptionTable";
+import FilterControls from "@/components/FilterControls";
+import ConsumptionGauges from "@/components/ConsumptionGauges";
+import ConsumptionTrendChart from "@/components/ConsumptionTrendChart";
+import KpiCards from "@/components/KpiCards";
+import AnomalyReport from "@/components/AnomalyReport";
+import ConsumptionTable from "@/components/ConsumptionTable";
 
 // Cache expiration time (5 minutes) - moved outside component to avoid dependency issues
 const CACHE_DURATION = 5 * 60 * 1000;

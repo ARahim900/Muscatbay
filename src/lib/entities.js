@@ -1,4 +1,4 @@
-import { base44 } from './base44Client';
+import { base44 } from '@/lib/base44Client';
 
 
 export const System = base44.entities.System;

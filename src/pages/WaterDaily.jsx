@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { DailyWaterReading } from "@/api/entities";
+import { DailyWaterReading } from "@/lib/entities";
 import { Card, CardContent } from "@/components/ui/card";
-import FilterControls from "../components/water/daily/FilterControls";
-import ConsumptionGauges from "../components/water/daily/ConsumptionGauges";
-import ConsumptionTrendChart from "../components/water/daily/ConsumptionTrendChart";
-import KpiCards from "../components/water/daily/KpiCards";
-import AnomalyReport from "../components/water/daily/AnomalyReport";
-import ConsumptionTable from "../components/water/daily/ConsumptionTable";
+import FilterControls from "@/components/FilterControls";
+import ConsumptionGauges from "@/components/ConsumptionGauges";
+import ConsumptionTrendChart from "@/components/ConsumptionTrendChart";
+import KpiCards from "@/components/KpiCards";
+import AnomalyReport from "@/components/AnomalyReport";
+import ConsumptionTable from "@/components/ConsumptionTable";
 
 export default function WaterDaily() {
   const [records, setRecords] = useState([]);

@@ -1,20 +1,20 @@
-import Layout from "./Layout.jsx";
+import Layout from "@/pages/Layout.jsx";
 
-import Water from "./Water";
+import Water from "@/pages/Water";
 
-import Electricity from "./Electricity";
+import Electricity from "@/pages/Electricity";
 
-import HVAC from "./HVAC";
+import HVAC from "@/pages/HVAC";
 
-import Firefighting from "./Firefighting";
+import Firefighting from "@/pages/Firefighting";
 
-import Contractors from "./Contractors";
+import Contractors from "@/pages/Contractors";
 
-import STP from "./STP";
+import STP from "@/pages/STP";
 
-import WaterDaily from "./WaterDaily";
+import WaterDaily from "@/pages/WaterDaily";
 
-import Assistant from "./Assistant";
+import Assistant from "@/pages/Assistant";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
