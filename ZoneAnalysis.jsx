@@ -908,8 +908,8 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
       const rec = zoneMonthly[z]?.[last];
       if (!rec) return;
       const { bulk = 0, l3 = 0, l4 = 0 } = rec;
-      const includeL4 = !EXCLUDE_L4_ZONES.has(z);
-      const indiv = l3 + (includeL4 ? l4 : 0);
+      // According to specifications: Individual Meters = L3 Total only
+      const indiv = l3;
       const loss = bulk - indiv;
       const pct = bulk > 0 ? loss / bulk * 100 : -Infinity;
       if (pct > worstLoss) {
@@ -960,16 +960,16 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
         return { month: mon, bulk, individual: bulk, loss: 0 };
       });
     }
-    const includeL4 = !EXCLUDE_L4_ZONES.has(selectedZone);
     return months.map((mon) => {
       const rec = zoneMonthly[selectedZone]?.[mon] || { bulk: 0, l3: 0, l4: 0 };
-      const indiv = rec.l3 + (includeL4 ? rec.l4 : 0);
+      // According to specifications: Individual Meters = L3 Total only
+      const indiv = rec.l3;
       const loss = rec.bulk - indiv;
       return { month: mon, bulk: rec.bulk, individual: indiv, loss };
     });
   }, [selectedZone, months, zoneMonthly, sumByPredicate]);
 
-  // Metrics: L2-only for Zone Bulk; individuals = L3 + (L4 if zone allows); Difference = Bulk − Individuals
+  // Metrics: Zone Bulk = L2 only; Individual Meters = L3 Total only; Water Loss = L2 - L3
   const metrics = React.useMemo(() => {
     if (!selectedMonth || !selectedZone) {
       return { zoneBulk: 0, individualSum: 0, loss: 0, lossPercentage: "0.0", efficiency: "0.0", status: getZoneStatus(0) };
@@ -990,10 +990,15 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
     }
 
     const rec = zoneMonthly[selectedZone]?.[selectedMonth] || { bulk: 0, l3: 0, l4: 0 };
-    const includeL4 = !EXCLUDE_L4_ZONES.has(selectedZone);
+    
+    // According to specifications:
+    // Zone Bulk = L2 only
     const zoneBulk = rec.bulk;
-    const individualSum = rec.l3 + (includeL4 ? rec.l4 : 0);
-
+    
+    // Individual Meters = L3 Total only (not including L4)
+    const individualSum = rec.l3;
+    
+    // Water Loss = Difference = L2(zone Bulk) - L3(total)
     const loss = zoneBulk - individualSum;
     const rawLossPct = zoneBulk > 0 ? loss / zoneBulk * 100 : 0;
     const lossPercentage = rawLossPct.toFixed(1);
@@ -1118,7 +1123,7 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
           prettyZone(selectedZone) || "-"} Analysis for {selectedMonth || "-"}
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Zone Bulk = L2 only • L3/L4 Total = L3 + {!selectedZone || EXCLUDE_L4_ZONES.has(selectedZone) ? "0 (L4 excluded for this zone)" : "L4 (included for this zone)"} • Difference = L2 − (L3{!selectedZone || EXCLUDE_L4_ZONES.has(selectedZone) ? "" : " + L4"})
+          Zone Bulk = L2 only • Individual Meters = L3 Total only • Water Loss = L2(zone Bulk) − L3(total)
         </p>
       </div>
 
@@ -1157,7 +1162,7 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {isSpecial(selectedZone) ?
             "Bulk equals Individual; Loss remains zero by rule." :
-            `Monthly comparison of L2 (bulk) vs L3 ${EXCLUDE_L4_ZONES.has(selectedZone) ? "" : "+ L4 "}totals`}
+            "Monthly comparison of L2 (bulk) vs L3 totals"}
           </p>
         </CardHeader>
         <CardContent className="h-80">

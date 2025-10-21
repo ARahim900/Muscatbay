@@ -48,3 +48,20 @@ The implementation covers all specified zones:
 - Zone_SC (Sales Center) with café and bar
 
 This implementation provides comprehensive zone-level analysis capabilities for the water management system, enabling detailed consumption tracking, loss analysis, and system optimization insights.
+
+## [2025-01-21] - Fixed KPI Card Calculations
+
+### Fixed
+- **KPI Card Calculations**: Corrected the circular gauge calculations in Zone Analysis to match exact specifications:
+  - **Zone Bulk Meter Total**: Now correctly shows L2 only (was already correct)
+  - **Individual Meters Sum Total**: Now shows L3 Total only (previously included L4 in some zones)
+  - **Water Loss Distribution**: Now correctly calculated as L2(zone Bulk) - L3(total) (previously used L3+L4)
+
+- **Updated Trend Chart**: Chart now properly displays L2 bulk vs L3 totals comparison
+- **Consistent Calculations**: All consumption calculations across the Zone Analysis section now follow the exact specification
+
+### Technical Details
+- Modified `metrics` calculation in ZoneAnalysis.jsx to use only L3 for individual meters
+- Updated `zoneTrends` calculation to exclude L4 from individual meter totals
+- Updated `highestLossZone` calculation for consistent zone selection
+- Updated UI descriptions to clearly state the calculation formula
