@@ -65,3 +65,20 @@ This implementation provides comprehensive zone-level analysis capabilities for 
 - Updated `zoneTrends` calculation to exclude L4 from individual meter totals
 - Updated `highestLossZone` calculation for consistent zone selection
 - Updated UI descriptions to clearly state the calculation formula
+
+## [2025-01-21] - KPI Display Improvements and Debugging
+
+### Fixed
+- **Water Loss Distribution Display**: Now shows actual calculated value instead of absolute value
+- **Color Coding**: Added proper color coding for loss values (red for positive loss, green for negative loss when L3 > L2)
+- **Loss Description**: Improved description to handle both positive and negative loss scenarios
+
+### Added
+- **Debug Logging**: Added console logging for Zone_01_(FM) Jan-25 data to help troubleshoot any data issues
+- **Version Comment**: Added version comment to help with browser cache issues
+
+### Technical Details
+- Fixed GaugeCard display logic for Water Loss Distribution
+- Added conditional color coding based on loss value (positive/negative)
+- Added debug logging in metrics calculation for troubleshooting
+- Improved loss description text based on calculation result
