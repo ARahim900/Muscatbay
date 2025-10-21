@@ -22,7 +22,8 @@ import {
 } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, MoreVertical, ChevronDown, Filter } from "lucide-react";
+import { Search, MoreVertical, ChevronDown, Filter, ChevronRight, Building, Users, Droplets, Zap } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Helper to format 'YYYY-MM' -> 'Mon-yy' (e.g., 2025-01 -> Jan-25)
 function formatYyyyMmToMonYY(yyyyMm) {
@@ -47,6 +48,153 @@ const NA_ALIASES = ["n/a", "na"];
 
 // Zones where L4 must be excluded to avoid duplication
 const EXCLUDE_L4_ZONES = new Set(["Zone_03_(A)", "Zone_03_(B)"]);
+
+// Define the complete zone hierarchy structure as provided
+const ZONE_HIERARCHY = {
+  "L1": {
+    label: "Main Bulk (NAMA)",
+    children: {
+      "Direct Connections": {
+        label: "Direct Connections",
+        children: {
+          "Hotel Main Building": { type: "Direct Connection" },
+          "Al Adrak Camp": { type: "Direct Connection" },
+          "Al Adrak Company (accommodation)": { type: "Direct Connection" },
+          "Irrigation Controller UP": { type: "Direct Connection" },
+          "Irrigation Controller DOWN": { type: "Direct Connection" },
+          "Community Mgmt - Technical Zone, STP": { type: "Direct Connection" },
+          "Building (Security)": { type: "Direct Connection" },
+          "Building (ROP)": { type: "Direct Connection" },
+          "PHASE 02, MAIN ENTRANCE": { type: "Direct Connection" },
+          "Irrigation Tank 01 (Inlet)": { type: "Direct Connection" },
+          "Irrigation Tank 04 (Z08)": { type: "Direct Connection" }
+        }
+      },
+      "Zone_01_(FM)": {
+        label: "Zone 01 (FM)",
+        level: "L2",
+        children: {
+          "Building FM": { type: "L3", level: "L3" },
+          "Building Taxi": { type: "L3", level: "L3" },
+          "Building B1": { type: "L3", level: "L3" },
+          "Building B2": { type: "L3", level: "L3" },
+          "Building B3": { type: "L3", level: "L3" },
+          "Building B4": { type: "L3", level: "L3" },
+          "Building B5": { type: "L3", level: "L3" },
+          "Building B6": { type: "L3", level: "L3" },
+          "Building B7": { type: "L3", level: "L3" },
+          "Building B8": { type: "L3", level: "L3" },
+          "Building CIF/CB": { type: "L3", level: "L3" },
+          "Building Nursery": { type: "L3", level: "L3" },
+          "Cabinet FM (CONTRACTORS OFFICE)": { type: "L3", level: "L3" },
+          "Building (MEP)": { type: "L3", level: "L3" },
+          "Room PUMP (FIRE)": { type: "L3", level: "L3" },
+          "Building CIF/CB (COFFEE SH)": { type: "L3", level: "L3" },
+          "Irrigation Tank (Z01_FM)": { type: "L3", level: "L3" }
+        }
+      },
+      "Zone_03_(A)": {
+        label: "Zone 03 (A)",
+        level: "L2",
+        children: {
+          "Villas_21_units": {
+            label: "Villas (21 units)",
+            type: "L3",
+            level: "L3",
+            children: {
+              "Z3-42": { type: "L3", level: "L3" },
+              "Z3-38": { type: "L3", level: "L3" },
+              "Z3-23": { type: "L3", level: "L3" },
+              "Z3-41": { type: "L3", level: "L3" },
+              "Z3-37": { type: "L3", level: "L3" },
+              "Z3-43": { type: "L3", level: "L3" },
+              "Z3-31": { type: "L3", level: "L3" },
+              "Z3-35": { type: "L3", level: "L3" },
+              "Z3-40": { type: "L3", level: "L3" },
+              "Z3-30": { type: "L3", level: "L3" },
+              "Z3-33": { type: "L3", level: "L3" },
+              "Z3-36": { type: "L3", level: "L3" },
+              "Z3-32": { type: "L3", level: "L3" },
+              "Z3-39": { type: "L3", level: "L3" },
+              "Z3-34": { type: "L3", level: "L3" },
+              "Z3-27": { type: "L3", level: "L3" },
+              "Z3-24": { type: "L3", level: "L3" },
+              "Z3-25": { type: "L3", level: "L3" },
+              "Z3-26": { type: "L3", level: "L3" },
+              "Z3-29": { type: "L3", level: "L3" },
+              "Z3-28": { type: "L3", level: "L3" }
+            }
+          },
+          "Building_Bulk_Meters": {
+            label: "Building Bulk Meters (10 units)",
+            type: "L3",
+            level: "L3"
+          }
+        }
+      },
+      "Zone_03_(B)": {
+        label: "Zone 03 (B)",
+        level: "L2",
+        children: {
+          "Villas_22_units": {
+            label: "Villas (22 units)",
+            type: "L3",
+            level: "L3"
+          },
+          "Building_Bulk_Meters_11": {
+            label: "Building Bulk Meters (11 units)",
+            type: "L3",
+            level: "L3"
+          },
+          "Irrigation Tank 02 (Z03)": { type: "L3", level: "L3" }
+        }
+      },
+      "Zone_05": {
+        label: "Zone 05",
+        level: "L2",
+        children: {
+          "Villas_33_units": {
+            label: "Villas (33 units)",
+            type: "L3",
+            level: "L3"
+          },
+          "Irrigation Tank 03 (Z05)": { type: "L3", level: "L3" }
+        }
+      },
+      "Zone_08": {
+        label: "Zone 08",
+        level: "L2",
+        children: {
+          "Villas_22_units_Z8": {
+            label: "Villas (22 units)",
+            type: "L3",
+            level: "L3"
+          }
+        }
+      },
+      "Zone_VS": {
+        label: "Zone VS (Village Square)",
+        level: "L2",
+        children: {
+          "Irrigation Tank - VS PO Water": { type: "L3", level: "L3" },
+          "Coffee 1 (GF Shop No.591)": { type: "L3", level: "L3" },
+          "Coffee 2 (GF Shop No.594 A)": { type: "L3", level: "L3" },
+          "Supermarket (FF Shop No.591)": { type: "L3", level: "L3" },
+          "Pharmacy (FF Shop No.591 A)": { type: "L3", level: "L3" },
+          "Laundry Services (FF Shop No.593)": { type: "L3", level: "L3" },
+          "Shop No.593 A": { type: "L3", level: "L3" }
+        }
+      },
+      "Zone_SC": {
+        label: "Zone SC (Sales Center)",
+        level: "L2",
+        children: {
+          "Sale Centre Caffe & Bar": { type: "L3", level: "L3" }
+        }
+      }
+    }
+  }
+};
 
 function getMonthsInRange(start, end) {
   if (!start || !end) return [];
@@ -523,6 +671,156 @@ function GaugeCard({ title, value, unit = "m³", percent = 100, color = "#3b82f6
   );
 }
 
+// Zone Hierarchy Visualization Component
+function ZoneHierarchyView({ meters = [], selectedMonth = "", onZoneSelect = () => {} }) {
+  const [expandedNodes, setExpandedNodes] = React.useState(new Set(["L1", "Zone_01_(FM)", "Zone_03_(A)", "Zone_03_(B)", "Zone_05", "Zone_08"]));
+
+  const toggleNode = React.useCallback((nodeId) => {
+    setExpandedNodes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(nodeId)) {
+        newSet.delete(nodeId);
+      } else {
+        newSet.add(nodeId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Calculate consumption for a node based on meters
+  const getNodeConsumption = React.useCallback((zonePath, level) => {
+    if (!meters.length) return 0;
+    
+    return meters.reduce((total, meter) => {
+      if (!meter.readings || !selectedMonth) return total;
+      
+      // Match based on zone and level
+      const meterZone = (meter.zone || "").trim();
+      const meterLevel = (meter.level || "").toUpperCase();
+      
+      if (zonePath && meterZone.includes(zonePath.replace("_", " ")) && meterLevel === level) {
+        return total + (Number(meter.readings[selectedMonth]) || 0);
+      }
+      
+      return total;
+    }, 0);
+  }, [meters, selectedMonth]);
+
+  const renderHierarchyNode = React.useCallback((nodeKey, node, path = "", depth = 0) => {
+    const fullPath = path ? `${path}.${nodeKey}` : nodeKey;
+    const hasChildren = node.children && Object.keys(node.children).length > 0;
+    const isExpanded = expandedNodes.has(nodeKey);
+    const isZoneNode = node.level === "L2";
+    const isDirectConnection = node.type === "Direct Connection";
+
+    // Get consumption data
+    const consumption = getNodeConsumption(nodeKey, node.level || "L2");
+    
+    const getIcon = () => {
+      if (depth === 0) return <Droplets className="h-4 w-4 text-blue-600" />;
+      if (isDirectConnection) return <Zap className="h-4 w-4 text-orange-500" />;
+      if (isZoneNode) return <Building className="h-4 w-4 text-green-600" />;
+      return <Users className="h-4 w-4 text-purple-500" />;
+    };
+
+    const getStatusColor = () => {
+      if (consumption === 0) return "text-gray-500";
+      if (consumption < 1000) return "text-yellow-600";
+      if (consumption < 5000) return "text-green-600";
+      return "text-red-600";
+    };
+
+    return (
+      <div key={nodeKey} className="select-none">
+        <div 
+          className={`flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md cursor-pointer transition-colors ${
+            depth === 0 ? 'font-semibold text-gray-900 dark:text-white' : 
+            depth === 1 ? 'font-medium text-gray-800 dark:text-gray-200' : 
+            'text-gray-700 dark:text-gray-300'
+          }`}
+          style={{ paddingLeft: `${depth * 20 + 8}px` }}
+          onClick={() => {
+            if (isZoneNode) {
+              onZoneSelect(nodeKey);
+            }
+            if (hasChildren) {
+              toggleNode(nodeKey);
+            }
+          }}
+        >
+          {hasChildren && (
+            <button
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleNode(nodeKey);
+              }}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+            </button>
+          )}
+          {getIcon()}
+          <span className="flex-1">
+            {node.label || nodeKey.replace(/_/g, " ")}
+          </span>
+          <span className={`text-sm font-medium ${getStatusColor()}`}>
+            {consumption.toLocaleString()} m³
+          </span>
+        </div>
+        
+        {hasChildren && isExpanded && (
+          <div className="ml-4">
+            {Object.entries(node.children).map(([childKey, childNode]) =>
+              renderHierarchyNode(childKey, childNode, fullPath, depth + 1)
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }, [expandedNodes, toggleNode, getNodeConsumption, onZoneSelect]);
+
+  return (
+    <Card className="bg-white dark:bg-gray-800 shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-gray-900 dark:text-white flex items-center gap-2">
+          <Building className="h-5 w-5 text-blue-600" />
+          Water System Zone Hierarchy
+        </CardTitle>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Click on zone names to analyze. Consumption shown for {selectedMonth || "selected month"}
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1 max-h-96 overflow-y-auto">
+          {Object.entries(ZONE_HIERARCHY.L1.children).map(([zoneKey, zoneData]) =>
+            renderHierarchyNode(zoneKey, zoneData)
+          )}
+        </div>
+        <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <Building className="h-4 w-4 text-green-600" />
+              <span className="text-gray-600 dark:text-gray-300">Zone Bulk (L2)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-purple-500" />
+              <span className="text-gray-600 dark:text-gray-300">Individual Meters (L3)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-orange-500" />
+              <span className="text-gray-600 dark:text-gray-300">Direct Connections</span>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDate = "2025-07" }) {
   // Build months from DB but prefer fixed Jan-25..Aug-25 if available
   const months = React.useMemo(() => {
@@ -981,6 +1279,15 @@ export default function ZoneAnalysis({ meters = [], startDate = "2025-01", endDa
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Zone Hierarchy Visualization */}
+      <ZoneHierarchyView 
+        meters={meters}
+        selectedMonth={selectedMonth}
+        onZoneSelect={(zoneKey) => {
+          setSelectedZone(zoneKey);
+        }}
+      />
     </div>
   );
 }
