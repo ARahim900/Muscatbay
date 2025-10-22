@@ -90,77 +90,103 @@ export default function Water() {
     []
   );
 
-  // Real water system data from tables, memoized for stable reference
-  const WATER_SYSTEM_DATA = useMemo(() => ({
-    monthlyTrends: [
-      {
-        month: "Jan-25",
-        A1: 32580, A2: 34677, A3Ind: 27225, A3Bulk: 27076,
-        stage1Vol: -2097, stage2Vol: 7452, totalLossVol: 5355,
-        loss1: -6.4, loss2: 21.5, efficiency: 83.6
-      },
-      {
-        month: "Feb-25",
-        A1: 44043, A2: 35246, A3Ind: 27781, A3Bulk: 27637,
-        stage1Vol: 8797, stage2Vol: 7465, totalLossVol: 16262,
-        loss1: 20.0, loss2: 21.2, efficiency: 63.1
-      },
-      {
-        month: "Mar-25",
-        A1: 34915, A2: 38982, A3Ind: 31647, A3Bulk: 32413,
-        stage1Vol: -4067, stage2Vol: 7335, totalLossVol: 3268,
-        loss1: -11.6, loss2: 18.8, efficiency: 90.6
-      },
-      {
-        month: "Apr-25",
-        A1: 46039, A2: 45237, A3Ind: 38285, A3Bulk: 38191,
-        stage1Vol: 802, stage2Vol: 6952, totalLossVol: 7754,
-        loss1: 1.7, loss2: 15.4, efficiency: 83.2
-      },
-      {
-        month: "May-25",
-        A1: 58425, A2: 46354, A3Ind: 41852, A3Bulk: 41932,
-        stage1Vol: 12071, stage2Vol: 4502, totalLossVol: 16573,
-        loss1: 20.7, loss2: 9.7, efficiency: 71.6
-      },
-      {
-        month: "Jun-25",
-        A1: 41840, A2: 40010, A3Ind: 28713, A3Bulk: 28763,
-        stage1Vol: 1830, stage2Vol: 11297, totalLossVol: 13127,
-        loss1: 4.4, loss2: 28.2, efficiency: 68.6
-      },
-      {
-        month: "Jul-25",
-        A1: 41475, A2: 37154, A3Ind: 31235, A3Bulk: 27503,
-        stage1Vol: 4321, stage2Vol: 5919, totalLossVol: 10240,
-        loss1: 10.4, loss2: 15.9, efficiency: 75.3
-      },
-      {
-        month: "Aug-25",
-        A1: 41743, A2: 38843, A3Ind: 31654, A3Bulk: 28123,
-        stage1Vol: 2900, stage2Vol: 7189, totalLossVol: 10089,
-        loss1: 6.9, loss2: 18.5, efficiency: 75.8
-      }],
+  // Calculate monthly trends from actual Supabase meter data
+  const monthlyTrends = useMemo(() => {
+    if (!Array.isArray(meters) || meters.length === 0) return [];
 
-    zonePerformance: [
-      { zone: "Zone_08", average: 2789, status: "Active", Jul25: 3542, Aug25: 3840 },
-      { zone: "Zone_03_(A)", average: 4970, status: "Active", Jul25: 6026, Aug25: 6212 },
-      { zone: "Zone_03_(B)", average: 3020, status: "Active", Jul25: 3243, Aug25: 2886 },
-      { zone: "Zone_05", average: 3941, status: "Active", Jul25: 3497, Aug25: 3968 },
-      { zone: "Zone_01_(FM)", average: 1892, status: "Active", Jul25: 1974, Aug25: 2305 },
-      { zone: "Zone_VS", average: 30, status: "Low", Jul25: 60, Aug25: 77 },
-      { zone: "Zone_SC", average: 61, status: "Critical", Jul25: 60, Aug25: 61 }],
+    // All available month keys in the format 'Mon-YY'
+    const allMonthKeys = ['Jan-25', 'Feb-25', 'Mar-25', 'Apr-25', 'May-25', 'Jun-25', 'Jul-25', 'Aug-25', 'Sep-25'];
 
-    consumptionByType: [
-      { type: "Commercial (Retail)", total: 173673, percentage: 52.4, color: "#3b82f6" },
-      { type: "Zone Infrastructure", total: 134506, percentage: 40.6, color: "#10b981" },
-      { type: "Residential (Villas)", total: 92871, percentage: 28.0, color: "#f59e0b" },
-      { type: "Irrigation", total: 6149, percentage: 1.9, color: "#06b6d4" },
-      { type: "Common Areas", total: 314, percentage: 0.1, color: "#8b5cf6" }]
-  }), []);
+    return allMonthKeys.map(monthKey => {
+      // Calculate A1: Sum of all L1 meters for this month
+      const A1 = meters
+        .filter(m => (m.level || '').toUpperCase() === 'L1')
+        .reduce((sum, m) => sum + (Number(m.readings?.[monthKey]) || 0), 0);
 
-  // Use WATER_SYSTEM_DATA monthlyTrends directly to avoid hook dependency warning
-  const monthlyTrends = WATER_SYSTEM_DATA.monthlyTrends;
+      // Calculate A2: Sum of all L2 meters for this month
+      const A2 = meters
+        .filter(m => (m.level || '').toUpperCase() === 'L2')
+        .reduce((sum, m) => sum + (Number(m.readings?.[monthKey]) || 0), 0);
+
+      // Calculate A3_Individual: Sum of L3 + L4 meters
+      const A3Ind = meters
+        .filter(m => {
+          const level = (m.level || '').toUpperCase();
+          return level === 'L3' || level === 'L4';
+        })
+        .reduce((sum, m) => sum + (Number(m.readings?.[monthKey]) || 0), 0);
+
+      // Calculate A3_Bulk: Same as A2 (zone bulk meters)
+      const A3Bulk = A2;
+
+      // Calculate losses
+      const stage1Vol = A1 - A2;  // Loss between L1 and L2
+      const stage2Vol = A2 - A3Ind;  // Loss between L2 and L3/L4
+      const totalLossVol = A1 - A3Ind;  // Total system loss
+
+      const loss1 = A1 > 0 ? (stage1Vol / A1 * 100) : 0;
+      const loss2 = A2 > 0 ? (stage2Vol / A2 * 100) : 0;
+      const efficiency = A1 > 0 ? (A3Ind / A1 * 100) : 0;
+
+      return {
+        month: monthKey,
+        A1,
+        A2,
+        A3Ind,
+        A3Bulk,
+        stage1Vol,
+        stage2Vol,
+        totalLossVol,
+        loss1: Number(loss1.toFixed(1)),
+        loss2: Number(loss2.toFixed(1)),
+        efficiency: Number(efficiency.toFixed(1))
+      };
+    }).filter(trend => trend.A1 > 0 || trend.A2 > 0 || trend.A3Ind > 0); // Only include months with data
+  }, [meters]);
+
+  // Calculate zone performance from actual Supabase meter data
+  const zonePerformance = useMemo(() => {
+    if (!Array.isArray(meters) || meters.length === 0) return [];
+
+    // Get unique zones
+    const zones = Array.from(new Set(meters.map(m => m.zone).filter(Boolean)));
+
+    return zones.map(zone => {
+      const zoneMeters = meters.filter(m => m.zone === zone);
+
+      // Calculate Jul-25 and Aug-25 totals
+      const Jul25 = zoneMeters.reduce((sum, m) => sum + (Number(m.readings?.['Jul-25']) || 0), 0);
+      const Aug25 = zoneMeters.reduce((sum, m) => sum + (Number(m.readings?.['Aug-25']) || 0), 0);
+
+      // Calculate average across all available months
+      const allMonths = ['Jan-25', 'Feb-25', 'Mar-25', 'Apr-25', 'May-25', 'Jun-25', 'Jul-25', 'Aug-25', 'Sep-25'];
+      let totalConsumption = 0;
+      let monthsWithData = 0;
+
+      allMonths.forEach(month => {
+        const monthTotal = zoneMeters.reduce((sum, m) => sum + (Number(m.readings?.[month]) || 0), 0);
+        if (monthTotal > 0) {
+          totalConsumption += monthTotal;
+          monthsWithData++;
+        }
+      });
+
+      const average = monthsWithData > 0 ? Math.round(totalConsumption / monthsWithData) : 0;
+
+      // Determine status based on average consumption
+      let status = "Active";
+      if (average < 100) status = "Critical";
+      else if (average < 500) status = "Low";
+
+      return {
+        zone,
+        average,
+        status,
+        Jul25: Math.round(Jul25),
+        Aug25: Math.round(Aug25)
+      };
+    }).filter(z => z.average > 0); // Only include zones with consumption
+  }, [meters]);
 
   const getMonthsInRange = useCallback((start, end) => {
     const months = [];
@@ -1280,12 +1306,12 @@ export default function Water() {
         <Card className="bg-white dark:bg-gray-800 shadow-lg">
           <CardHeader>
             <CardTitle className="text-gray-900 dark:text-white">Zone Performance Analysis</CardTitle>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Monthly consumption by zone</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Monthly consumption by zone from Supabase data</p>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={WATER_SYSTEM_DATA.zonePerformance}>
+                <BarChart data={zonePerformance}>
                   <XAxis dataKey="zone" stroke={chartStrokeColor} />
                   <YAxis stroke={chartStrokeColor} />
                   <Tooltip contentStyle={tooltipStyle} />
