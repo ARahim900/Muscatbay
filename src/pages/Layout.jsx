@@ -249,11 +249,9 @@ export default function Layout({ children, currentPageName }) {
       <header className={`bg-gradient-to-r from-[#4E4456] to-[#5a4d5f] text-slate-50 px-4 py-3 dark:from-gray-900 dark:to-gray-800 dark:text-white flex items-center justify-between shadow-xl z-40 relative sticky top-0 transition-all duration-300 border-b border-white/10 dark:border-gray-700 ${hideHeader ? "-translate-y-full" : "translate-y-0"}`}>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 ring-2 ring-white/20">
-            <img
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68ab9ed97412dcfe330813a6/22c0b05f3_IMG_3418.jpg"
-              alt="App logo"
-              className="w-full h-full object-contain"
-            />
+            <div className="w-full h-full bg-gradient-to-br from-[var(--accent)] to-[var(--color-success)] flex items-center justify-center">
+              <span className="text-white font-bold text-xl">FM</span>
+            </div>
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-wide">{getPageTitle(currentPageName)}</h1>

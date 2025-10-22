@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Connection Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background: #4E4456;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #5a4d5f;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .data-preview {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 Supabase Connection Test</h1>
+        
+        <div class="info">
+            <strong>Project:</strong> mtkgpoeaukfmndncfxts<br>
+            <strong>Table:</strong> Water Meter (Monthly)<br>
+            <strong>URL:</strong> https://mtkgpoeaukfmndncfxts.supabase.co
+        </div>
+
+        <button id="testBtn" onclick="testConnection()">Test Connection</button>
+        
+        <div id="status"></div>
+        <div id="dataPreview"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+        const supabaseUrl = 'https://mtkgpoeaukfmndncfxts.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10a2dwb2VhdWtmbW5kbmNmeHRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0MjQ1MDcsImV4cCI6MjA3NjAwMDUwN30.vevUqgoXO4ChJvOt4j8D_4V4H3ZRmf0XG6p9p9fJHFQ';
+
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+        window.testConnection = async function() {
+            const statusDiv = document.getElementById('status');
+            const dataPreviewDiv = document.getElementById('dataPreview');
+            const testBtn = document.getElementById('testBtn');
+
+            testBtn.disabled = true;
+            statusDiv.innerHTML = '<div class="status loading">🔄 Testing connection...</div>';
+            dataPreviewDiv.innerHTML = '';
+
+            try {
+                const { data, error } = await supabase
+                    .from('Water Meter (Monthly)')
+                    .select('*')
+                    .limit(5);
+
+                if (error) {
+                    throw error;
+                }
+
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ Connection Successful!<br>
+                        Found ${data.length} records (showing first 5)
+                    </div>
+                `;
+
+                if (data.length > 0) {
+                    dataPreviewDiv.innerHTML = `
+                        <div class="data-preview">
+                            <strong>Sample Data:</strong>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    dataPreviewDiv.innerHTML = `
+                        <div class="status loading">
+                            ⚠️ Table exists but contains no data. Add some records in Supabase dashboard.
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Connection Failed<br>
+                        <strong>Error:</strong> ${error.message}<br><br>
+                        <strong>Possible causes:</strong><br>
+                        • Table name doesn't match exactly (case-sensitive)<br>
+                        • Supabase project is paused<br>
+                        • Network connectivity issues<br>
+                        • Row Level Security (RLS) is blocking access
+                    </div>
+                `;
+                console.error('Connection error:', error);
+            } finally {
+                testBtn.disabled = false;
+            }
+        };
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                window.testConnection();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

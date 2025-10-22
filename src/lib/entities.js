@@ -1,31 +1,154 @@
-import { base44 } from '@/lib/base44Client';
+// Entity implementations with Supabase backend integration
+import { supabase } from './supabaseClient';
 
+const createEntityStub = (entityName) => ({
+  list: async () => {
+    console.warn(`${entityName}.list() called - implement custom backend`);
+    return [];
+  },
+  find: async (id) => {
+    console.warn(`${entityName}.find() called - implement custom backend`);
+    return null;
+  },
+  create: async (data) => {
+    console.warn(`${entityName}.create() called - implement custom backend`);
+    return { id: Date.now(), ...data };
+  },
+  update: async (id, data) => {
+    console.warn(`${entityName}.update() called - implement custom backend`);
+    return { id, ...data };
+  },
+  delete: async (id) => {
+    console.warn(`${entityName}.delete() called - implement custom backend`);
+    return { success: true };
+  }
+});
 
-export const System = base44.entities.System;
+// WaterMeter entity connected to Supabase
+export const WaterMeter = {
+  list: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('Water Meter (Monthly)')
+        .select('*');
 
-export const Alert = base44.entities.Alert;
+      if (error) {
+        console.error('Error fetching water meters:', error);
+        return [];
+      }
 
-export const Contractor = base44.entities.Contractor;
+      // Transform Supabase data to match frontend format
+      return (data || []).map((row, index) => ({
+        id: index + 1,
+        meter_label: row['Meter Label'] || '',
+        account_number: row['Acct #'] || '',
+        label: row['Label'] || '',
+        zone: row['Zone'] || '',
+        parent_meter: row['Parent Meter'] || '',
+        meter_type: row['Type'] || '',
+        level: determineLevel(row['Label']),
+        readings: {
+          'Jan-25': row['Jan-25'] || 0,
+          'Feb-25': row['Feb-25'] || 0,
+          'Mar-25': row['Mar-25'] || 0,
+          'Apr-25': row['Apr-25'] || 0,
+          'May-25': row['May-25'] || 0,
+          'Jun-25': row['Jun-25'] || 0,
+          'Jul-25': row['Jul-25'] || 0,
+          'Aug-25': row['Aug-25'] || 0,
+          'Sep-25': row['Sep-25'] || 0
+        }
+      }));
+    } catch (error) {
+      console.error('Error in WaterMeter.list():', error);
+      return [];
+    }
+  },
 
-export const Meter = base44.entities.Meter;
+  find: async (id) => {
+    try {
+      const meters = await WaterMeter.list();
+      return meters.find(m => m.id === id) || null;
+    } catch (error) {
+      console.error('Error in WaterMeter.find():', error);
+      return null;
+    }
+  },
 
-export const Contract = base44.entities.Contract;
+  create: async (data) => {
+    console.warn('WaterMeter.create() - implement if needed');
+    return { id: Date.now(), ...data };
+  },
 
-export const STPOperation = base44.entities.STPOperation;
+  update: async (id, data) => {
+    console.warn('WaterMeter.update() - implement if needed');
+    return { id, ...data };
+  },
 
-export const WaterMeter = base44.entities.WaterMeter;
+  delete: async (id) => {
+    console.warn('WaterMeter.delete() - implement if needed');
+    return { success: true };
+  }
+};
 
-export const FireSafetyEquipment = base44.entities.FireSafetyEquipment;
+// Helper function to determine meter level based on label
+function determineLevel(label) {
+  if (!label) return 'Unknown';
+  
+  const labelUpper = label.toUpperCase();
+  
+  // L1: Main source meters (A1, A2)
+  if (labelUpper.includes('A1') || labelUpper.includes('A2')) {
+    return 'L1';
+  }
+  
+  // L2: Zone bulk meters (A3)
+  if (labelUpper.includes('A3')) {
+    return 'L2';
+  }
+  
+  // L3: Secondary distribution
+  if (labelUpper.includes('L3') || labelUpper.includes('SECONDARY')) {
+    return 'L3';
+  }
+  
+  // L4: End users
+  if (labelUpper.includes('L4') || labelUpper.includes('END USER')) {
+    return 'L4';
+  }
+  
+  // DC: Direct connections
+  if (labelUpper.includes('DC') || labelUpper.includes('DIRECT')) {
+    return 'DC';
+  }
+  
+  return 'Unknown';
+}
 
-export const HvacMaintenanceLog = base44.entities.HvacMaintenanceLog;
+export const System = createEntityStub('System');
+export const Alert = createEntityStub('Alert');
+export const Contractor = createEntityStub('Contractor');
+export const Meter = createEntityStub('Meter');
+export const Contract = createEntityStub('Contract');
+export const STPOperation = createEntityStub('STPOperation');
+export const FireSafetyEquipment = createEntityStub('FireSafetyEquipment');
+export const HvacMaintenanceLog = createEntityStub('HvacMaintenanceLog');
+export const DailyWaterReading = createEntityStub('DailyWaterReading');
+export const MaintenanceSchedule = createEntityStub('MaintenanceSchedule');
+export const MaintenanceHistory = createEntityStub('MaintenanceHistory');
 
-export const DailyWaterReading = base44.entities.DailyWaterReading;
-
-export const MaintenanceSchedule = base44.entities.MaintenanceSchedule;
-
-export const MaintenanceHistory = base44.entities.MaintenanceHistory;
-
-
-
-// auth sdk:
-export const User = base44.auth;
+// Auth stub
+export const User = {
+  login: async (credentials) => {
+    console.warn('User.login() called - implement custom authentication');
+    return { token: 'stub-token', user: { id: 1, name: 'Admin' } };
+  },
+  logout: async () => {
+    console.warn('User.logout() called - implement custom authentication');
+    return { success: true };
+  },
+  getCurrentUser: async () => {
+    console.warn('User.getCurrentUser() called - implement custom authentication');
+    return { id: 1, name: 'Admin' };
+  }
+};
