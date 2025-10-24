@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"$appData = [Environment]::GetFolderPath(''ApplicationData''); New-Item -ItemType Directory -Force -Path \"\"$appData\\Claude\"\" | Out-Null; echo \"\"Created: $appData\\Claude\"\"\")",
+      "Read(//c/Users/Abdulrahim.Albalushi/**)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
