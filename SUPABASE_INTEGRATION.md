@@ -16,6 +16,10 @@ This document describes the Supabase backend integration for the Facility Manage
 
 **Status**: Fully Connected
 
+### ✅ Water System - Daily Analysis
+
+**Status**: Fully Connected
+
 **Supabase Table**: `Water Meter (Monthly)`
 
 **Frontend Pages**:
@@ -112,41 +116,234 @@ The system automatically determines the meter hierarchy level based on the `Labe
    - Visual charts and graphs
    - Type-specific statistics
 
+---
+
+### ✅ Water System - Daily Analysis
+
+**Status**: Fully Connected
+
+**Supabase Table**: `Daily_Water_September25`
+
+**Frontend Pages**:
+- `/Water` - Water System page (Daily view toggle)
+- `/WaterDaily` - Dedicated daily analysis page
+
+**Entity**: `DailyWaterReading` in `src/lib/entities.js`
+
+**Expected Table Schema**:
+
+The entity is flexible and can handle multiple column naming conventions:
+
+```sql
+create table public."Daily_Water_September25" (
+  "Date" text,              -- Full date "YYYY-MM-DD" (e.g., "2025-09-15")
+  -- OR "Day" integer,      -- Day of month (1-31)
+  "Zone" text,              -- Zone identifier (e.g., "Zone_01_(FM)")
+  "L2_Total_m3" numeric,    -- Bulk meter reading (zone level)
+  -- OR "L2 Total m3" numeric,
+  -- OR "Bulk_m3" numeric,
+  "L3_Total_m3" numeric,    -- Individual meters total
+  -- OR "L3 Total m3" numeric,
+  -- OR "Individual_m3" numeric,
+  "Loss_m3" numeric         -- Calculated loss (L2 - L3)
+  -- OR "Loss m3" numeric
+) TABLESPACE pg_default;
+```
+
+**Column Mapping** (Flexible):
+
+The entity automatically maps these column variations:
+- **Date**: `Date` (primary) or constructed from `Day`
+- **Zone**: `Zone` or `zone`
+- **L2 Bulk**: `L2_Total_m3`, `L2 Total m3`, or `Bulk_m3`
+- **L3 Individual**: `L3_Total_m3`, `L3 Total m3`, or `Individual_m3`
+- **Loss**: `Loss_m3` or `Loss m3`
+
+**Data Transformation**:
+
+The `DailyWaterReading.list()` method transforms Supabase data:
+
+```javascript
+{
+  id: 1,                              // Auto-generated
+  date: "2025-09-15",                // From "Date" column
+  day: 15,                           // Extracted from date
+  zone: "Zone_01_(FM)",              // From "Zone"
+  l2_total_m3: 1234.56,             // From "L2_Total_m3" (or variants)
+  l3_total_m3: 1100.23,             // From "L3_Total_m3" (or variants)
+  loss_m3: 134.33                    // From "Loss_m3" (or variants)
+}
+```
+
+**Available Methods**:
+
+1. **`DailyWaterReading.list()`** - Get all daily readings
+   ```javascript
+   const readings = await DailyWaterReading.list();
+   ```
+
+2. **`DailyWaterReading.getByDateRange(startDate, endDate)`** - Filter by date range
+   ```javascript
+   const readings = await DailyWaterReading.getByDateRange('2025-09-01', '2025-09-30');
+   ```
+
+3. **`DailyWaterReading.getByZone(zone)`** - Filter by specific zone
+   ```javascript
+   const readings = await DailyWaterReading.getByZone('Zone_01_(FM)');
+   ```
+
+**Features Enabled**:
+
+1. **Filter Controls**:
+   - Month selector (automatically detects available months from data)
+   - Multi-zone selection
+   - Date range slider (day 1-31)
+
+2. **Visualizations**:
+   - Consumption gauges (Bulk, Individual, Loss) - radial charts
+   - Trend charts (area chart for single zone, line chart for multi-zone)
+   - Daily consumption table with pagination
+
+3. **Analytics**:
+   - 5 KPI cards (total consumption, average daily, peak day, etc.)
+   - Anomaly detection (statistical analysis of unusual patterns)
+   - Loss percentage tracking
+   - Day-by-day breakdown
+
+4. **Data Processing**:
+   - Automatic aggregation across selected zones
+   - Loss calculation: `Loss = Bulk (L2) - Individual (L3)`
+   - Loss percentage: `Loss % = (Loss / Bulk) × 100`
+   - Status indicators: "Loss" or "Gain" based on calculation
+
+**Frontend Data Flow**:
+
+```
+User selects zones & date range
+    ↓
+DailyWaterReading.list() called
+    ↓
+Supabase query to Daily_Water_September25
+    ↓
+Data transformation (column mapping)
+    ↓
+Filter by selected month
+    ↓
+Aggregate data for selected zones
+    ↓
+Process day-by-day calculations
+    ↓
+Render charts, gauges, tables
+```
+
 ## Testing the Connection
 
 ### Method 1: Navigate to Water System Page
 
+#### Testing Monthly Data
+
 1. Start the development server: `npm run dev`
 2. Open the application in your browser
 3. Navigate to "Water System" from the sidebar
-4. The page should load meter data from Supabase
-5. Check the browser console for connection logs
+4. Ensure "Monthly Dashboard" view is selected (default)
+5. The page should load meter data from Supabase
+6. Check the browser console for connection logs
 
-### Method 2: Use Test Script
+**Expected Behavior**:
+- Overview tab shows consumption statistics
+- Monthly trends chart displays data
+- Zone performance cards appear with real data
+- Database tab shows complete meter listing
 
+#### Testing Daily Data
+
+1. Navigate to "Water System" page
+2. Click the "Daily Analysis" toggle button
+3. The page should load daily readings from Supabase
+4. Check the browser console for connection logs
+
+**Expected Behavior**:
+- Month selector appears with available months (auto-detected)
+- Zone multi-select shows available zones from data
+- Consumption gauges display with real values
+- Trend chart shows daily patterns
+- KPI cards show aggregated metrics
+- Daily consumption table displays all readings
+
+**Console Success Messages**:
+```
+🔍 Loading daily water data...
+✅ Successfully loaded daily readings
+📊 Found 300 daily records
+📅 Available months: Sep 2025
+🗺️ Zones: Zone_01_(FM), Zone_03_(A), Zone_03_(B), ...
+```
+
+### Method 2: Use Browser Console
+
+Open browser console and test the entities directly:
+
+#### Test Monthly Data
 ```javascript
-import { testSupabaseConnection } from './lib/testSupabase';
+import { WaterMeter } from '@/lib/entities';
 
-// Run in browser console or component
-testSupabaseConnection().then(result => {
-  console.log('Connection test result:', result);
-});
+// Get all meters
+const meters = await WaterMeter.list();
+console.log('Meters:', meters.length);
+console.log('Sample:', meters[0]);
+```
+
+#### Test Daily Data
+```javascript
+import { DailyWaterReading } from '@/lib/entities';
+
+// Get all daily readings
+const readings = await DailyWaterReading.list();
+console.log('Daily readings:', readings.length);
+console.log('Sample:', readings[0]);
+
+// Get readings for a specific date range
+const septReadings = await DailyWaterReading.getByDateRange('2025-09-01', '2025-09-30');
+console.log('September readings:', septReadings.length);
+
+// Get readings for a specific zone
+const zoneReadings = await DailyWaterReading.getByZone('Zone_01_(FM)');
+console.log('Zone readings:', zoneReadings.length);
 ```
 
 ### Expected Console Output
 
-**Success**:
+**Monthly Data Success**:
 ```
-🔍 Testing Supabase connection...
 ✅ Successfully connected to Supabase!
 📊 Found 50 water meters
-📋 Sample meter data: { id: 1, meter_label: "Zone_01_(FM)", ... }
+📋 Sample meter: {
+  id: 1,
+  meter_label: "Zone_01_(FM)",
+  level: "L2",
+  readings: { "Jan-25": 32580, ... }
+}
+```
+
+**Daily Data Success**:
+```
+✅ Successfully loaded daily readings
+📊 Found 300 daily records
+📋 Sample reading: {
+  id: 1,
+  date: "2025-09-15",
+  day: 15,
+  zone: "Zone_01_(FM)",
+  l2_total_m3: 1234.56,
+  l3_total_m3: 1100.23,
+  loss_m3: 134.33
+}
 ```
 
 **Failure**:
 ```
-🔍 Testing Supabase connection...
-❌ Supabase connection failed: [error message]
+❌ Error fetching data from Supabase
+Error: [error message details]
 ```
 
 ## Troubleshooting
@@ -218,7 +415,7 @@ export const DailyWaterReading = {
 
 ### Recommended Tables to Connect Next
 
-1. **Daily Water Readings** - For Water System Daily view
+1. ~~**Daily Water Readings**~~ - ✅ **CONNECTED** (Daily_Water_September25)
 2. **Contractors** - For Contractor Tracker page
 3. **Contracts** - For Contractor Tracker page
 4. **Electricity Meters** - For Electricity System page
@@ -266,5 +463,45 @@ For issues or questions:
 
 ---
 
-**Last Updated**: October 22, 2025  
-**Integration Status**: Water System Monthly - ✅ Connected
+## Quick Reference: Connected Tables
+
+| Table Name | Entity | Status | Page |
+|------------|--------|--------|------|
+| `Water Meter (Monthly)` | `WaterMeter` | ✅ Connected | Water System (Monthly) |
+| `Daily_Water_September25` | `DailyWaterReading` | ✅ Connected | Water System (Daily) |
+
+## Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Supabase Database                        │
+│  ┌──────────────────────┐  ┌─────────────────────────────┐  │
+│  │ Water Meter (Monthly)│  │ Daily_Water_September25     │  │
+│  └──────────┬───────────┘  └─────────────┬───────────────┘  │
+└─────────────┼──────────────────────────────┼─────────────────┘
+              │                              │
+              ▼                              ▼
+      ┌───────────────┐              ┌──────────────────┐
+      │  WaterMeter   │              │ DailyWaterReading│
+      │    Entity     │              │     Entity       │
+      └───────┬───────┘              └────────┬─────────┘
+              │                               │
+              ▼                               ▼
+      ┌──────────────────────────────────────────────┐
+      │          Water.jsx Component                  │
+      │  ┌────────────────┐  ┌──────────────────┐   │
+      │  │ Monthly View   │  │   Daily View     │   │
+      │  │ - Overview     │  │ - Gauges         │   │
+      │  │ - Database     │  │ - Trend Charts   │   │
+      │  │ - Hierarchy    │  │ - KPI Cards      │   │
+      │  │ - Analysis     │  │ - Table          │   │
+      │  └────────────────┘  └──────────────────┘   │
+      └──────────────────────────────────────────────┘
+```
+
+---
+
+**Last Updated**: October 24, 2025
+**Integration Status**:
+- Water System Monthly - ✅ Connected
+- Water System Daily - ✅ Connected
