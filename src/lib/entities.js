@@ -133,7 +133,163 @@ export const Contract = createEntityStub('Contract');
 export const STPOperation = createEntityStub('STPOperation');
 export const FireSafetyEquipment = createEntityStub('FireSafetyEquipment');
 export const HvacMaintenanceLog = createEntityStub('HvacMaintenanceLog');
-export const DailyWaterReading = createEntityStub('DailyWaterReading');
+// DailyWaterReading entity connected to Supabase
+export const DailyWaterReading = {
+  list: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('Daily_Water_September25')
+        .select('*')
+        .order('Date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching daily water readings:', error);
+        return [];
+      }
+
+      // Transform Supabase data to match frontend format
+      return (data || []).map((row, index) => {
+        // Parse date - handle multiple possible formats
+        let dateString = '';
+        let dayNumber = 1;
+
+        if (row['Date']) {
+          // If Date is a full date string (e.g., "2025-09-15")
+          dateString = row['Date'];
+          const dateParts = dateString.split('-');
+          if (dateParts.length === 3) {
+            dayNumber = parseInt(dateParts[2], 10);
+          }
+        } else if (row['Day']) {
+          // If there's a Day column, construct the date
+          dayNumber = parseInt(row['Day'], 10);
+          dateString = `2025-09-${String(dayNumber).padStart(2, '0')}`;
+        }
+
+        return {
+          id: index + 1,
+          date: dateString,  // Format: "YYYY-MM-DD"
+          day: dayNumber,  // Day of month (1-31)
+          zone: row['Zone'] || row['zone'] || '',
+          l2_total_m3: parseFloat(row['L2_Total_m3'] || row['L2 Total m3'] || row['Bulk_m3'] || 0),
+          l3_total_m3: parseFloat(row['L3_Total_m3'] || row['L3 Total m3'] || row['Individual_m3'] || 0),
+          loss_m3: parseFloat(row['Loss_m3'] || row['Loss m3'] || 0)
+        };
+      });
+    } catch (error) {
+      console.error('Error in DailyWaterReading.list():', error);
+      return [];
+    }
+  },
+
+  find: async (id) => {
+    try {
+      const readings = await DailyWaterReading.list();
+      return readings.find(r => r.id === id) || null;
+    } catch (error) {
+      console.error('Error in DailyWaterReading.find():', error);
+      return null;
+    }
+  },
+
+  // Get readings for a specific date range
+  getByDateRange: async (startDate, endDate) => {
+    try {
+      const { data, error } = await supabase
+        .from('Daily_Water_September25')
+        .select('*')
+        .gte('Date', startDate)
+        .lte('Date', endDate)
+        .order('Date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching daily water readings by date range:', error);
+        return [];
+      }
+
+      return (data || []).map((row, index) => {
+        let dateString = row['Date'] || '';
+        let dayNumber = 1;
+
+        if (dateString) {
+          const dateParts = dateString.split('-');
+          if (dateParts.length === 3) {
+            dayNumber = parseInt(dateParts[2], 10);
+          }
+        }
+
+        return {
+          id: index + 1,
+          date: dateString,
+          day: dayNumber,
+          zone: row['Zone'] || row['zone'] || '',
+          l2_total_m3: parseFloat(row['L2_Total_m3'] || row['L2 Total m3'] || row['Bulk_m3'] || 0),
+          l3_total_m3: parseFloat(row['L3_Total_m3'] || row['L3 Total m3'] || row['Individual_m3'] || 0),
+          loss_m3: parseFloat(row['Loss_m3'] || row['Loss m3'] || 0)
+        };
+      });
+    } catch (error) {
+      console.error('Error in DailyWaterReading.getByDateRange():', error);
+      return [];
+    }
+  },
+
+  // Get readings for a specific zone
+  getByZone: async (zone) => {
+    try {
+      const { data, error } = await supabase
+        .from('Daily_Water_September25')
+        .select('*')
+        .eq('Zone', zone)
+        .order('Date', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching daily water readings by zone:', error);
+        return [];
+      }
+
+      return (data || []).map((row, index) => {
+        let dateString = row['Date'] || '';
+        let dayNumber = 1;
+
+        if (dateString) {
+          const dateParts = dateString.split('-');
+          if (dateParts.length === 3) {
+            dayNumber = parseInt(dateParts[2], 10);
+          }
+        }
+
+        return {
+          id: index + 1,
+          date: dateString,
+          day: dayNumber,
+          zone: row['Zone'] || row['zone'] || '',
+          l2_total_m3: parseFloat(row['L2_Total_m3'] || row['L2 Total m3'] || row['Bulk_m3'] || 0),
+          l3_total_m3: parseFloat(row['L3_Total_m3'] || row['L3 Total m3'] || row['Individual_m3'] || 0),
+          loss_m3: parseFloat(row['Loss_m3'] || row['Loss m3'] || 0)
+        };
+      });
+    } catch (error) {
+      console.error('Error in DailyWaterReading.getByZone():', error);
+      return [];
+    }
+  },
+
+  create: async (data) => {
+    console.warn('DailyWaterReading.create() - implement if needed');
+    return { id: Date.now(), ...data };
+  },
+
+  update: async (id, data) => {
+    console.warn('DailyWaterReading.update() - implement if needed');
+    return { id, ...data };
+  },
+
+  delete: async (id) => {
+    console.warn('DailyWaterReading.delete() - implement if needed');
+    return { success: true };
+  }
+};
 export const MaintenanceSchedule = createEntityStub('MaintenanceSchedule');
 export const MaintenanceHistory = createEntityStub('MaintenanceHistory');
 
