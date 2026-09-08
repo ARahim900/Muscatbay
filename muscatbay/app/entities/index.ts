@@ -26,5 +26,8 @@ export * from './stp';
 // Water entity
 export * from './water';
 
+// Hand-recorded meter readings (potable bulk meters + irrigation network)
+export * from './manual-readings';
+
 // Fire safety entities
 export * from './fire-safety';

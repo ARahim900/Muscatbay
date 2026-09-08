@@ -67,7 +67,8 @@ muscatbay/app/
 │   ├── hvac/               #   overview/findings/recurring tabs + types (was gulf-expert)
 │   ├── stp/                #   plant-watch, stp-analytics, stp-trend-charts
 │   ├── water/              #   daily-water-report, date-range-picker,
-│   │                       #   daily-report/*, monthly/*
+│   │                       #   daily-report/*, monthly/*, satellite/*,
+│   │                       #   manual-readings/* (Kalhat hand readings + Irrigation mode)
 │   │                       # ── Cross-cutting ──
 │   ├── shared/             #   stats-grid, data-table/, page-header, breadcrumbs,
 │   │                       #   tab-navigation, inspection, findings-register, skeleton…

@@ -21,3 +21,4 @@
 
 export * from './assets';
 export * from './fire-safety';
+export * from './water-readings';

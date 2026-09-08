@@ -12,7 +12,7 @@ import { useSupabaseRealtime } from "@/hooks/useSupabaseRealtime";
 import { saveFilterPreferences, loadFilterPreferences } from "@/lib/filter-preferences";
 import {
     ChevronLeft, ChevronRight, CalendarDays, RefreshCw,
-    Gauge, MapPin, Plug, Database, ClipboardList,
+    Gauge, MapPin, Plug, Database, ClipboardList, ClipboardPen,
 } from "lucide-react";
 
 // ─── Subcomponents extracted into ./daily-report/ for maintainability.
@@ -32,6 +32,10 @@ import { computeBriefing } from "./daily-report/briefing-metrics";
 import { ZoneWatch } from "./daily-report/zone-watch";
 import { DailyDatabase } from "./daily-report/daily-database";
 import { DailyExceptions } from "./daily-report/daily-exceptions";
+// ─── Hand readings — the bulk meters Kalhat reads by hand (Main Bulk, zone
+//     bulks, Central Park). Its own fetch: reachable even when the month has
+//     no Grafana rows yet, because that is exactly when it is needed.
+import { PotableManualPanel } from "./manual-readings/potable-manual-panel";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -81,7 +85,7 @@ function getMonthsForYear(year: string): string[] {
 
 // ─── Section tabs (mirrors the Monthly dashboard's five-section structure) ────
 
-type DailyTab = 'watch' | 'zones' | 'dc' | 'database' | 'exceptions';
+type DailyTab = 'watch' | 'zones' | 'dc' | 'database' | 'exceptions' | 'readings';
 
 const DAILY_TABS: TabItem<DailyTab>[] = [
     { value: 'watch', label: 'Zone Watch', icon: Gauge },
@@ -89,7 +93,17 @@ const DAILY_TABS: TabItem<DailyTab>[] = [
     { value: 'dc', label: 'Direct Connections', icon: Plug },
     { value: 'database', label: 'Daily Database', icon: Database },
     { value: 'exceptions', label: 'Exceptions', icon: ClipboardList },
+    { value: 'readings', label: 'Hand Readings', icon: ClipboardPen },
 ];
+
+/** `"Sep-26"` + day → `"2026-09-05"`, the date key the hand-readings panel works in. */
+function toDateKeyFromMonth(month: string, day: number): string {
+    const [abbrev, yy] = month.split('-');
+    const monthIdx = MONTH_ABBREVS.indexOf(abbrev);
+    const year = 2000 + Number(yy);
+    const safeDay = Math.min(Math.max(day, 1), daysInMonth(month));
+    return `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(safeDay).padStart(2, '0')}`;
+}
 
 const isDailyTab = (v: unknown): v is DailyTab => DAILY_TABS.some(t => t.value === v);
 
@@ -388,15 +402,29 @@ export function DailyWaterReport({ onStatusChange }: { onStatusChange?: (status:
             {status === 'error' && <ErrorState message={errorMsg} onRetry={() => fetchMonth(selectedMonth)} />}
             {status === 'empty' && <EmptyState month={selectedMonth} onRetry={() => fetchMonth(selectedMonth)} />}
 
+            {/* ── Section tabs (mirrors the Monthly dashboard). Rendered as soon
+                   as the month has been probed — the Hand Readings tab must stay
+                   reachable for a month that has no Grafana rows yet. */}
+            {(reportData || status === 'empty') && (
+                <Tabs<DailyTab>
+                    aria-label="Water daily sections"
+                    value={activeTab}
+                    onChange={setActiveTab}
+                    tabs={DAILY_TABS}
+                />
+            )}
+
+            {/* ── Hand Readings — Kalhat's bulk-meter indexes, own fetch ──── */}
+            {(reportData || status === 'empty') && activeTab === 'readings' && (
+                <SectionBoundary title="Hand Readings">
+                <div id="panel-readings" role="tabpanel" aria-labelledby="tab-readings" tabIndex={0}>
+                    <PotableManualPanel initialDate={toDateKeyFromMonth(selectedMonth, selectedDay)} />
+                </div>
+                </SectionBoundary>
+            )}
+
             {reportData && (
                 <>
-                    {/* ── Section tabs (mirrors the Monthly dashboard) ────── */}
-                    <Tabs<DailyTab>
-                        aria-label="Water daily sections"
-                        value={activeTab}
-                        onChange={setActiveTab}
-                        tabs={DAILY_TABS}
-                    />
 
                     {/* ── Zone Watch — fleet view, heatmap, leak triage ───── */}
                     {activeTab === 'watch' && (

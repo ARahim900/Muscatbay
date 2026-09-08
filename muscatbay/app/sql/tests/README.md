@@ -1,12 +1,26 @@
 # Local SQL tests
 
 ```bash
-npm run test:sql:local
+PG_BIN=/usr/lib/postgresql/16/bin sql/tests/run-local.sh
 ```
 
-Applies the two production-security migrations to a **throwaway local
-PostgreSQL 16 cluster** and asserts how they behave. No Supabase project, no
-network, no cost, and it cannot touch live data.
+`run-local.sh` applies the stubs, a realistic `water_meters` /
+`water_daily_consumption` pair, the 2026-09-01 security migration and the
+2026-09-08 manual-readings migration to a **throwaway local PostgreSQL 16
+cluster**, then runs `manual-readings.test.sql`. No Supabase project, no
+network, no cost, and it cannot touch live data. `initdb` refuses to run as
+root — run the script as an unprivileged user (e.g. `runuser -u postgres --
+env PG_BIN=… bash sql/tests/run-local.sh`).
+
+`manual-readings.test.sql` asserts the hand-readings trigger: a lone reading
+derives nothing (cell stays NULL), consecutive readings derive today − yesterday
+into `water_daily_consumption.day_N`, corrections and deletions propagate for
+`manual_owned` meters, a Grafana value on a shared meter is never overwritten
+while an empty cell is filled, negatives are kept, irrigation readings never
+reach the potable table, viewers cannot write, and registries are admin-only.
+
+The two older assertion files below (`rls-roles`, `alert-incidents`) predate
+the runner and are not wired into it yet.
 
 Requires the PostgreSQL 16 server binaries — on Debian/Ubuntu
 `apt-get install -y postgresql-16`. Set `PG_BIN` if they live elsewhere.
