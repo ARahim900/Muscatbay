@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Month ledger — meters × days of derived consumption, the same shape as the
- * Kalhat sheet the readings come from. A cell shows "—" when either that day
+ * Daily log — meters × days of derived consumption for the month on screen,
+ * the same shape as the Kalhat sheet the readings come from. Every day is a
+ * column, so a missed day shows as a gap instead of disappearing. A cell shows "—" when either that day
  * or the day before was not read; hovering a cell shows the two indexes it was
  * derived from. Negative days are marked, never hidden.
  */
@@ -48,8 +49,8 @@ export function ManualReadingsLedger({
         <SectionCard>
             <SectionCard.Header
                 icon={Table2}
-                title={`Daily consumption — ${monthLabel}`}
-                description="Derived from consecutive hand readings, m³"
+                title={`Daily log — ${monthLabel}`}
+                description="One column per day; consumption derived from consecutive hand readings, m³"
                 action={<ExportButton rows={exportRows} filename={`hand-readings-${monthLabel}`} />}
             />
             <SectionCard.Body flush>

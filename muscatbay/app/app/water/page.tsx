@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { BarChart3, CalendarDays, DatabaseZap, RefreshCw, AlertTriangle, Satellite, Sprout } from "lucide-react";
+import { BarChart3, CalendarDays, DatabaseZap, RefreshCw, AlertTriangle, Satellite, ClipboardPen } from "lucide-react";
 
 // Water data
 import type { WaterMeter } from "@/lib/water-data";
@@ -51,13 +51,14 @@ const SatelliteView = dynamic(
     () => import("@/components/water/satellite/satellite-view").then((m) => ({ default: m.SatelliteView })),
     { loading: () => <Skeleton className="h-embed w-full rounded-card" />, ssr: false },
 );
-// Irrigation — a separate hand-read network with its own fetch (like Daily).
-const IrrigationView = dynamic(
-    () => import("@/components/water/manual-readings/irrigation-view").then((m) => ({ default: m.IrrigationView })),
+// Hand Readings — Kalhat's daily hand-recorded meters (Irrigation + Potable
+// water tables), its own fetch and realtime channel (like Daily).
+const HandReadingsView = dynamic(
+    () => import("@/components/water/manual-readings/hand-readings-view").then((m) => ({ default: m.HandReadingsView })),
     { loading: () => <Skeleton className="h-96 w-full rounded-card" />, ssr: false },
 );
 
-type DashboardView = "monthly" | "daily" | "satellite" | "irrigation";
+type DashboardView = "monthly" | "daily" | "satellite" | "readings";
 
 // Base tables behind the monthly dashboard — module-level so the array
 // reference stays stable across renders (the realtime hook re-subscribes
@@ -147,8 +148,8 @@ export default function WaterPage() {
     // so the page keeps ONE data-source chip (DESIGN_SYSTEM.md §0 — no duplicate
     // "live data" information).
     const [dailyStatus, setDailyStatus] = useState<ViewStatus | null>(null);
-    // Same arrangement for Irrigation — its own fetch and realtime channel.
-    const [irrigationStatus, setIrrigationStatus] = useState<ViewStatus | null>(null);
+    // Same arrangement for Hand Readings — its own fetch and realtime channel.
+    const [readingsStatus, setReadingsStatus] = useState<ViewStatus | null>(null);
 
     // Stable fetch function — used both on mount and by the real-time handler
     const fetchWaterData = useCallback(async (silent = false) => {
@@ -222,16 +223,16 @@ export default function WaterPage() {
         ? { state: "connecting" }
         : dashboardView === "daily" && dailyStatus
             ? dailyStatus
-            : dashboardView === "irrigation" && irrigationStatus
-                ? irrigationStatus
+            : dashboardView === "readings" && readingsStatus
+                ? readingsStatus
             : error
                 ? { state: "offline", syncedAt: timeLabel(lastUpdated) }
                 : { state: isLive ? "live" : "connecting", syncedAt: timeLabel(lastUpdated) };
 
-    // Monthly and Satellite both render from the monthly fetch; Daily and
-    // Irrigation do not. A failed or empty monthly read therefore blocks those
+    // Monthly and Satellite both render from the monthly fetch; Daily and Hand
+    // Readings do not. A failed or empty monthly read therefore blocks those
     // two views only — the mode switch stays on screen so the daily report and
-    // the irrigation entry remain reachable.
+    // the hand-readings entry remain reachable.
     const monthlyBlocked = Boolean(error) || !hasData;
     const readsMonthly = dashboardView === "monthly" || dashboardView === "satellite";
 
@@ -276,7 +277,7 @@ export default function WaterPage() {
 
             {!isLoading && (
                 <>
-                    {/* PRIMARY mode switch: Monthly / Daily / Satellite / Irrigation — always
+                    {/* PRIMARY mode switch: Monthly / Daily / Satellite / Hand Readings — always
                         rendered once loading ends, so a failed monthly read never
                         locks the operator out of the daily report. */}
                     <SegmentedControl<DashboardView>
@@ -287,7 +288,7 @@ export default function WaterPage() {
                             { value: "monthly", label: "Monthly", icon: BarChart3 },
                             { value: "daily", label: "Daily", icon: CalendarDays },
                             { value: "satellite", label: "Satellite", icon: Satellite },
-                            { value: "irrigation", label: "Irrigation", icon: Sprout },
+                            { value: "readings", label: "Hand Readings", icon: ClipboardPen },
                         ]}
                     />
 
@@ -304,10 +305,10 @@ export default function WaterPage() {
                             </SectionBoundary>
                         )}
 
-                        {/* Irrigation — hand-read network, its own fetch, unaffected by the monthly read */}
-                        {dashboardView === "irrigation" && (
-                            <SectionBoundary title="Irrigation">
-                                <IrrigationView onStatusChange={setIrrigationStatus} />
+                        {/* Hand Readings — Irrigation + Potable tables, own fetch, unaffected by the monthly read */}
+                        {dashboardView === "readings" && (
+                            <SectionBoundary title="Hand readings">
+                                <HandReadingsView onStatusChange={setReadingsStatus} />
                             </SectionBoundary>
                         )}
 
