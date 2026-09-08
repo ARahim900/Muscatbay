@@ -19,6 +19,16 @@
  * reloads them on controllerchange), so stale sessions self-heal on next visit.
  *
  * History:
+ *   v9 (2026-09-08) flushes clients holding the pre-Hand-Readings bundle. The
+ *                   hand-readings tables were renamed `reading` → `consumption`
+ *                   in the same deploy; an open tab kept its cached
+ *                   `_next/static` chunks (this file was unchanged, so no new
+ *                   SW installed and no controllerchange reload fired) and
+ *                   asked PostgREST for a column that no longer exists —
+ *                   "column irrigation_daily_readings.reading does not exist".
+ *                   A SHIPPED SCHEMA CHANGE THEREFORE NEEDS A VERSION BUMP
+ *                   HERE: content-hashed chunks are only picked up once a new
+ *                   SW claims the client.
  *   v8 (2026-08-30) re-precaches the brand mark. /logo.png was missing from the
  *                   build for a period; `install` runs once per SW version and
  *                   tolerates a per-asset failure, so every client that
@@ -32,7 +42,7 @@
  *   v5 unstuck clients stranded on an app shell referencing deleted chunks.
  */
 
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 const SHELL_CACHE = `muscatbay-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `muscatbay-static-${CACHE_VERSION}`;
 const PAGES_CACHE = `muscatbay-pages-${CACHE_VERSION}`;

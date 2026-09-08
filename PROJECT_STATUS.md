@@ -484,6 +484,17 @@ stops at last month" problem is structurally closed:
 
 ## 4. Known gaps & data debt
 
+- **Closed 2026-09-08 — a shipped column rename needs a service-worker bump.**
+  After the hand-readings tables moved from `reading` to `consumption`, an
+  already-open tab kept showing "column irrigation_daily_readings.reading
+  does not exist". The deploy was correct and the database was correct; the
+  PWA service worker caches `/_next/static/*` cache-first and only hands a
+  client onto a new bundle when `sw.js` itself changes, so no new SW
+  installed, no `controllerchange` fired, and `register-sw.tsx` never ran its
+  reload. `public/sw.js` `CACHE_VERSION` bumped v8 → v9, which drops every
+  cache and reloads open sessions. **Rule: any deploy that changes a column
+  the client selects must bump `CACHE_VERSION` in the same commit** — a
+  code-only deploy cannot reach a tab that is already open.
 - **Open 2026-09-08 — hand readings, two loose ends.** (1) "SA TSE" on the
   Kalhat irrigation sheet is not on the owner's meter list; it is stored under
   its sheet name (`IRR-SA-TSE`) until the owner says which tank it is (Tank 05
