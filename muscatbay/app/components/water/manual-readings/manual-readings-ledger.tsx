@@ -1,11 +1,10 @@
 "use client";
 
 /**
- * Daily log — meters × days of derived consumption for the month on screen,
- * the same shape as the Kalhat sheet the readings come from. Every day is a
- * column, so a missed day shows as a gap instead of disappearing. A cell shows "—" when either that day
- * or the day before was not read; hovering a cell shows the two indexes it was
- * derived from. Negative days are marked, never hidden.
+ * Daily log — meters × days of recorded consumption for the month on screen,
+ * the same shape as the Kalhat sheet the figures come from. Every day is a
+ * column, so a missed day shows as a gap instead of disappearing. A cell
+ * shows "—" when nothing was recorded. Negative days are marked, never hidden.
  */
 
 import { useMemo } from "react";
@@ -38,7 +37,6 @@ export function ManualReadingsLedger({
             meter: meter.name,
             key: meter.key,
             date: d.date,
-            reading_m3: d.reading,
             consumption_m3: d.consumption,
             note: d.note ?? "",
         }))),
@@ -50,7 +48,7 @@ export function ManualReadingsLedger({
             <SectionCard.Header
                 icon={Table2}
                 title={`Daily log — ${monthLabel}`}
-                description="One column per day; consumption derived from consecutive hand readings, m³"
+                description="One column per day; consumption as recorded by Kalhat, m³"
                 action={<ExportButton rows={exportRows} filename={`hand-readings-${monthLabel}`} />}
             />
             <SectionCard.Body flush>
@@ -88,11 +86,9 @@ export function ManualReadingsLedger({
                                         {days.map((d) => {
                                             const future = d.date > todayKey;
                                             const negative = d.consumption !== null && d.consumption < 0;
-                                            const title = d.reading === null
-                                                ? "Not read"
-                                                : d.previousReading === null
-                                                    ? `Index ${d.reading} m³ · no reading the day before`
-                                                    : `${d.previousReading} → ${d.reading} m³`;
+                                            const title = d.consumption === null
+                                                ? "Not recorded"
+                                                : `${d.consumption} m³${d.note ? ` · ${d.note}` : ""}`;
                                             return (
                                                 <td
                                                     key={d.date}
@@ -119,7 +115,7 @@ export function ManualReadingsLedger({
                 </div>
             </SectionCard.Body>
             <SectionCard.Footer>
-                “—” = not derivable (that day or the day before was not read). Month = sum of the derivable days only, not an estimate of the full month.
+                “—” = not recorded. Month = sum of the recorded days only, not an estimate of the full month.
             </SectionCard.Footer>
         </SectionCard>
     );

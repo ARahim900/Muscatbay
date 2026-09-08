@@ -6,9 +6,9 @@
  *   potable    → water_manual_meters / water_manual_readings   (key = account number)
  *   irrigation → irrigation_meters   / irrigation_daily_readings (key = meter key)
  *
- * Readings are CUMULATIVE METER INDEXES (m³). Consumption for a day is
- * today − yesterday and is `null` whenever either reading is absent — an
- * unread day is never shown as 0 (CLAUDE.md non-negotiable #1).
+ * Each row is one meter's CONSUMPTION for one day (m³), exactly as Kalhat
+ * recorded it. A day with no row is "not recorded" and is `null` — never 0
+ * (CLAUDE.md non-negotiable #1). Negatives are kept and flagged, not clamped.
  *
  * Isomorphic: no `next/*`, no `window` — `mobile/` bundles this file as-is.
  * Writes live in `actions/water-readings.ts`.
@@ -128,21 +128,21 @@ function normaliseIrrigationMeter(row: IrrigationMeterRow): ManualMeter {
 }
 
 function normalisePotableReading(row: WaterManualReadingRow): ManualReading | null {
-    const reading = toNumberOrNull(row.reading);
-    if (reading === null) return null;
+    const consumption = toNumberOrNull(row.consumption);
+    if (consumption === null) return null;
     return {
         key: row.account_number,
         date: row.reading_date,
-        reading,
+        consumption,
         note: row.note,
         appliedConsumption: toNumberOrNull(row.applied_consumption),
     };
 }
 
 function normaliseIrrigationReading(row: IrrigationReadingRow): ManualReading | null {
-    const reading = toNumberOrNull(row.reading);
-    if (reading === null) return null;
-    return { key: row.meter_key, date: row.reading_date, reading, note: row.note, appliedConsumption: null };
+    const consumption = toNumberOrNull(row.consumption);
+    if (consumption === null) return null;
+    return { key: row.meter_key, date: row.reading_date, consumption, note: row.note, appliedConsumption: null };
 }
 
 // ─── Readers ─────────────────────────────────────────────────────────────────
@@ -193,11 +193,7 @@ export async function fetchManualMeters(
     }
 }
 
-/**
- * Readings for every meter of one system between two date keys (inclusive).
- * Callers that want consumption for `from` should ask from `from − 1 day`, as
- * `fetchManualReadingsForMonth` does.
- */
+/** Readings for every meter of one system between two date keys (inclusive). */
 export async function fetchManualReadings(
     system: ManualReadingSystem,
     fromDate: string,
@@ -212,7 +208,7 @@ export async function fetchManualReadings(
         if (system === 'potable') {
             const { data, error } = await client
                 .from(tables.readings)
-                .select('id, account_number, reading_date, reading, note, applied_consumption, updated_at')
+                .select('id, account_number, reading_date, consumption, note, applied_consumption, updated_at')
                 .gte('reading_date', fromDate)
                 .lte('reading_date', toDate)
                 .order('reading_date')
@@ -226,7 +222,7 @@ export async function fetchManualReadings(
         }
         const { data, error } = await client
             .from(tables.readings)
-            .select('id, meter_key, reading_date, reading, note, updated_at')
+            .select('id, meter_key, reading_date, consumption, note, updated_at')
             .gte('reading_date', fromDate)
             .lte('reading_date', toDate)
             .order('reading_date')
@@ -242,17 +238,14 @@ export async function fetchManualReadings(
     }
 }
 
-/**
- * Readings for the calendar month of `dateKey`, plus the last day of the
- * previous month so day 1's consumption can be derived.
- */
+/** Readings for the calendar month of `dateKey`. */
 export async function fetchManualReadingsForMonth(
     system: ManualReadingSystem,
     dateKey: string,
     clientOverride?: SupabaseClient,
 ): Promise<ManualReadingsResult> {
     const days = monthDateKeys(dateKey);
-    return fetchManualReadings(system, shiftDateKey(days[0], -1), days[days.length - 1], clientOverride);
+    return fetchManualReadings(system, days[0], days[days.length - 1], clientOverride);
 }
 
 // ─── Pure derivation ─────────────────────────────────────────────────────────
@@ -261,17 +254,13 @@ export async function fetchManualReadingsForMonth(
 export interface DerivedDay {
     key: string;
     date: string;
-    /** Today's index, or `null` if not read. */
-    reading: number | null;
-    /** Yesterday's index, or `null` if not read. */
-    previousReading: number | null;
-    /** today − yesterday; `null` unless both were read. Negative is kept and must be flagged. */
+    /** The day's consumption as recorded; `null` = not recorded. Negative is kept and must be flagged. */
     consumption: number | null;
     note: string | null;
     appliedConsumption: number | null;
 }
 
-/** `readings` indexed as key → date → reading. */
+/** `readings` indexed as key → date → row. */
 export function indexReadings(readings: ManualReading[]): Map<string, Map<string, ManualReading>> {
     const byKey = new Map<string, Map<string, ManualReading>>();
     for (const r of readings) {
@@ -285,29 +274,23 @@ export function indexReadings(readings: ManualReading[]): Map<string, Map<string
     return byKey;
 }
 
-/** Derive one meter-day from the index. */
+/** Look up one meter-day from the index. */
 export function deriveDay(
     index: Map<string, Map<string, ManualReading>>,
     key: string,
     date: string,
 ): DerivedDay {
-    const byDate = index.get(key);
-    const today = byDate?.get(date) ?? null;
-    const yesterday = byDate?.get(shiftDateKey(date, -1)) ?? null;
-    const reading = today?.reading ?? null;
-    const previousReading = yesterday?.reading ?? null;
+    const row = index.get(key)?.get(date) ?? null;
     return {
         key,
         date,
-        reading,
-        previousReading,
-        consumption: reading !== null && previousReading !== null ? round3(reading - previousReading) : null,
-        note: today?.note ?? null,
-        appliedConsumption: today?.appliedConsumption ?? null,
+        consumption: row?.consumption ?? null,
+        note: row?.note ?? null,
+        appliedConsumption: row?.appliedConsumption ?? null,
     };
 }
 
-/** meters × dates grid of derived days, meters in display order. */
+/** meters × dates grid, meters in display order. */
 export function buildLedger(
     meters: ManualMeter[],
     readings: ManualReading[],
@@ -318,8 +301,8 @@ export function buildLedger(
 }
 
 /**
- * Sum of derived consumption over `days` for the given meter keys.
- * Returns `null` when NOT ONE day was derivable — a blank, not a 0.
+ * Sum of recorded consumption over `days` for the given meter keys.
+ * Returns `null` when NOT ONE day was recorded — a blank, not a 0.
  */
 export function sumConsumption(
     ledger: { meter: ManualMeter; days: DerivedDay[] }[],
@@ -351,8 +334,8 @@ export function round3(v: number): number {
 
 export interface ManualReadingEntry {
     key: string;
-    /** `null` clears the reading for that meter/date. */
-    reading: number | null;
+    /** The day's consumption, m³; `null` clears the row for that meter/date. */
+    consumption: number | null;
     note?: string | null;
 }
 
@@ -365,8 +348,8 @@ export interface SaveManualReadingsInput {
 
 export const MAX_MANUAL_ENTRIES = 50;
 export const MAX_NOTE_LENGTH = 500;
-/** A cumulative index above this is a typo, not a reading (largest bulk meter reads ~10⁷ m³). */
-export const MAX_READING = 999_999_999;
+/** A daily figure beyond this is a typo, not a reading (the Main Bulk peaks near 3,000 m³/day). */
+export const MAX_READING = 999_999;
 
 /**
  * Validates a save request. Returns the list of problems (empty = valid).
@@ -388,13 +371,11 @@ export function validateManualReadings(input: SaveManualReadingsInput, today: st
             }
             if (seen.has(entry.key)) problems.push(`Meter ${entry.key} appears twice.`);
             seen.add(entry.key);
-            if (entry.reading !== null) {
-                if (typeof entry.reading !== 'number' || !Number.isFinite(entry.reading)) {
-                    problems.push(`Meter ${entry.key}: reading must be a number.`);
-                } else if (entry.reading < 0) {
-                    problems.push(`Meter ${entry.key}: a meter index cannot be negative.`);
-                } else if (entry.reading > MAX_READING) {
-                    problems.push(`Meter ${entry.key}: reading is implausibly large.`);
+            if (entry.consumption !== null) {
+                if (typeof entry.consumption !== 'number' || !Number.isFinite(entry.consumption)) {
+                    problems.push(`Meter ${entry.key}: consumption must be a number.`);
+                } else if (Math.abs(entry.consumption) > MAX_READING) {
+                    problems.push(`Meter ${entry.key}: consumption is implausibly large.`);
                 }
             }
             if (entry.note != null && (typeof entry.note !== 'string' || entry.note.length > MAX_NOTE_LENGTH)) {
@@ -408,12 +389,13 @@ export function validateManualReadings(input: SaveManualReadingsInput, today: st
 /**
  * Turns the text the operator typed into a number or `null` (blank = clear).
  * Returns `undefined` when the text is not a number at all, so the form can
- * mark the field instead of silently dropping it.
+ * mark the field instead of silently dropping it. A leading minus is allowed
+ * (the sheet carries a few negative days) and is flagged, not rejected.
  */
 export function parseReadingInput(text: string): number | null | undefined {
     const trimmed = text.trim().replace(/,/g, '');
     if (trimmed === '') return null;
-    if (!/^\d+(\.\d{0,3})?$/.test(trimmed)) return undefined;
+    if (!/^-?\d+(\.\d{0,3})?$/.test(trimmed)) return undefined;
     const n = Number(trimmed);
     return Number.isFinite(n) ? n : undefined;
 }

@@ -6,24 +6,24 @@
 --   1. POTABLE bulk meters (Main Bulk C43659, the six zone bulks, Central Park).
 --      Grafana never reports the Main Bulk, Zone 8 bulk or Central Park
 --      (the month initializer already reserves them as "email-owned"), and it
---      occasionally misses Zone 3B. The hand reading is stored as recorded
---      (`water_manual_readings`, a cumulative meter index in m³) and a trigger
---      writes the derived daily consumption (today − yesterday) into the
---      existing `water_daily_consumption.day_N` cell, so every Water view —
---      Daily, Monthly month-to-date, Satellite, Dashboard — picks it up with no
+--      occasionally misses Zone 3B. The hand figure is stored as recorded
+--      (`water_manual_readings`, the DAY'S CONSUMPTION in m³ — the Kalhat
+--      sheets are day-by-day consumption, confirmed from the owner's file on
+--      2026-09-08) and a trigger copies it into the existing
+--      `water_daily_consumption.day_N` cell, so every Water view — Daily,
+--      Monthly month-to-date, Satellite, Dashboard — picks it up with no
 --      read-path change.
 --
 --   2. IRRIGATION network (main tank sources, outlet, zone tanks, controllers).
 --      Entirely new data, not related to the potable tables: its own registry
 --      (`irrigation_meters`) and long-format readings table
---      (`irrigation_daily_readings`). Consumption is derived in the app.
+--      (`irrigation_daily_readings`), one row per meter per day.
 --
 -- Overwrite rules for the potable fill (the part that could corrupt a balance):
 --   * `water_manual_meters.manual_owned = true` (C43659, 4300342, 4300320):
---     the hand reading is the ONLY source, so the derived value always
---     replaces the day cell — corrections propagate, a cleared reading empties
---     the cell again.
---   * every other account: the derived value lands only in a cell that is
+--     the hand figure is the ONLY source, so it always replaces the day cell —
+--     corrections propagate, a cleared reading empties the cell again.
+--   * every other account: the hand figure lands only in a cell that is
 --     empty, or that still holds the value this table wrote earlier
 --     (`applied_consumption`). An instrumented Grafana reading is never
 --     overwritten by hand-entered data.
@@ -80,12 +80,13 @@ create table if not exists public.water_manual_readings (
     account_number text not null
         references public.water_manual_meters (account_number) on update cascade,
     reading_date   date not null,
-    -- Cumulative meter index as read off the dial, m³. Consumption is derived.
-    reading        numeric(12,3) not null check (reading >= 0),
+    -- The day's consumption as Kalhat recorded it, m³. Negative values are
+    -- kept and flagged in the app (meter swap, misread) — never clamped.
+    consumption    numeric(12,3) not null,
     note           text check (note is null or char_length(note) <= 500),
     -- What the trigger last wrote into water_daily_consumption for this date
-    -- (NULL = nothing written, e.g. no reading the day before). Used to tell
-    -- "our" value apart from a Grafana value on shared accounts.
+    -- (NULL = nothing written). Used to tell "our" value apart from a Grafana
+    -- value on shared accounts.
     applied_consumption numeric(12,3),
     recorded_by    uuid default auth.uid(),
     created_at     timestamptz not null default now(),
@@ -94,7 +95,7 @@ create table if not exists public.water_manual_readings (
 );
 
 comment on table public.water_manual_readings is
-    'Hand-recorded cumulative index readings (m³) for potable bulk meters. A trigger derives daily consumption into water_daily_consumption.';
+    'Hand-recorded daily consumption (m³) for potable bulk meters. A trigger copies each day into water_daily_consumption.';
 
 create index if not exists water_manual_readings_date_idx
     on public.water_manual_readings (reading_date);
@@ -117,19 +118,25 @@ create table if not exists public.irrigation_meters (
 comment on table public.irrigation_meters is
     'Irrigation-network meters read by hand. Separate from the potable water_* tables by design.';
 
+-- Names follow the Kalhat "Irrigation" sheet (the source of the data); the
+-- owner's meter list in brackets where it differs. Meters on the owner's list
+-- with no sheet row yet (PO line, Tank 05 FM, Controller 08) are kept so they
+-- can be recorded from now on. "SA TSE" is on the sheet but not on the list —
+-- kept under its sheet name until the owner says which tank it is.
 insert into public.irrigation_meters (meter_key, display_name, location, role, sort_order) values
-    ('IRR-MAIN-BW',  'Main IRR Tank / Bore Well',   'Main irrigation tank', 'source',       10),
-    ('IRR-MAIN-TSE', 'Main IRR Tank / TSE STP',     'Main irrigation tank', 'source',       20),
-    ('IRR-MAIN-PO',  'Main IRR Tank / PO Line',     'Main irrigation tank', 'source',       30),
-    ('IRR-MAIN-OUT', 'Main Irrigation IR Outlet',   'Main irrigation tank', 'outlet',       40),
-    ('IRR-TANK-02',  'IR Tank 02 (CP)',             'Central Park',         'distribution', 50),
-    ('IRR-TANK-03',  'IR Tank 03 (Z5)',             'Zone 5',               'distribution', 60),
-    ('IRR-TANK-04',  'IR Tank 04 (Z8)',             'Zone 8',               'distribution', 70),
-    ('IRR-TANK-05',  'IR Tank 05 (FM)',             'Zone FM',              'distribution', 80),
-    ('IRR-TANK-06',  'IR Tank 06 (VS)',             'Village Square',       'distribution', 90),
-    ('IRR-CTRL-08',  'IR Controller 08',            null,                   'distribution', 100),
-    ('IRR-CTRL-09',  'IR Controller 09',            null,                   'distribution', 110),
-    ('IRR-TANK-JMB', 'IR Tank Feeding (JMB)',       'JMB',                  'distribution', 120)
+    ('IRR-MAIN-BW',  'Main Tank / Bore Well',            'Main irrigation tank', 'source',       10),
+    ('IRR-MAIN-TSE', 'Main Irrigation from STP (TSE)',   'Main irrigation tank', 'source',       20),
+    ('IRR-MAIN-PO',  'Main IRR Tank / PO Line',          'Main irrigation tank', 'source',       30),
+    ('IRR-MAIN-OUT', 'Main Irrigation IR Outlet',        'Main irrigation tank', 'outlet',       40),
+    ('IRR-TANK-02',  'Central Park TSE (IR Tank 02)',    'Central Park',         'distribution', 50),
+    ('IRR-TANK-03',  'Z5 TSE Water (IR Tank 03)',        'Zone 5',               'distribution', 60),
+    ('IRR-TANK-04',  'Z8 TSE Water (IR Tank 04)',        'Zone 8',               'distribution', 70),
+    ('IRR-TANK-05',  'IR Tank 05 (FM)',                  'Zone FM',              'distribution', 80),
+    ('IRR-TANK-06',  'Village Square TSE (IR Tank 06)',  'Village Square',       'distribution', 90),
+    ('IRR-SA-TSE',   'SA TSE',                           null,                   'distribution', 95),
+    ('IRR-CTRL-08',  'IR Controller 08',                 null,                   'distribution', 100),
+    ('IRR-CTRL-09',  'IR Controller 09',                 null,                   'distribution', 110),
+    ('IRR-TANK-JMB', 'Jumarieh Feeding Tank (JMB)',      'Jumarieh',             'distribution', 120)
 on conflict (meter_key) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -140,7 +147,8 @@ create table if not exists public.irrigation_daily_readings (
     meter_key    text not null
         references public.irrigation_meters (meter_key) on update cascade,
     reading_date date not null,
-    reading      numeric(12,3) not null check (reading >= 0),
+    -- The day's consumption as recorded, m³ (negatives kept and flagged).
+    consumption  numeric(12,3) not null,
     note         text check (note is null or char_length(note) <= 500),
     recorded_by  uuid default auth.uid(),
     created_at   timestamptz not null default now(),
@@ -149,7 +157,7 @@ create table if not exists public.irrigation_daily_readings (
 );
 
 comment on table public.irrigation_daily_readings is
-    'Hand-recorded cumulative index readings (m³) for irrigation meters. Consumption = today − yesterday, derived in the app.';
+    'Hand-recorded daily consumption (m³) for irrigation meters, one row per meter per day.';
 
 create index if not exists irrigation_daily_readings_date_idx
     on public.irrigation_daily_readings (reading_date);
@@ -182,8 +190,8 @@ create trigger irrigation_daily_readings_set_updated_at
 -- 6. Potable fill — derived consumption → water_daily_consumption.day_N
 -- ---------------------------------------------------------------------------
 
--- today − yesterday for one account/date; NULL when either reading is absent.
--- A negative result is returned as-is (meter swap, rollover, misread): the app
+-- The recorded consumption for one account/date; NULL when nothing was
+-- recorded. A negative value is returned as-is (meter swap, misread): the app
 -- flags negatives, it never hides them.
 create or replace function public.water_manual_daily_consumption(p_account text, p_date date)
 returns numeric
@@ -191,16 +199,13 @@ language sql
 stable
 set search_path = public, pg_temp
 as $$
-    select today.reading - yesterday.reading
-    from public.water_manual_readings as today
-    join public.water_manual_readings as yesterday
-      on yesterday.account_number = today.account_number
-     and yesterday.reading_date = today.reading_date - 1
-    where today.account_number = p_account
-      and today.reading_date = p_date;
+    select r.consumption
+    from public.water_manual_readings as r
+    where r.account_number = p_account
+      and r.reading_date = p_date;
 $$;
 
--- Applies the derived value for ONE account/date into the wide daily table,
+-- Applies the recorded value for ONE account/date into the wide daily table,
 -- honouring the overwrite rules in the header, and records what was written.
 --
 -- SECURITY DEFINER: the caller is an operator whose RLS already allows this
@@ -237,7 +242,7 @@ begin
     where account_number = p_account and reading_date = p_date;
 
     -- Make sure the month row exists (metadata copied from the registry, all
-    -- day cells NULL — a missing reading must stay NULL, never 0).
+    -- day cells NULL — a missing day must stay NULL, never 0).
     insert into public.water_daily_consumption
         (meter_id, meter_name, account_number, label, zone, parent_meter, type, month, year)
     select m.meter_id, m.meter_name, btrim(m.account_number), m.label, m.zone, m.parent_meter, m.type, v_month, v_year
@@ -271,8 +276,8 @@ begin
 end;
 $$;
 
--- A reading on date D changes the consumption of D (D − D-1) and of D+1
--- (D+1 − D). An UPDATE that moves the date touches both old and new dates.
+-- A row for date D fills cell D. An UPDATE that moves the date also clears
+-- the old date's cell (subject to the same overwrite rules).
 create or replace function public.water_manual_readings_apply()
 returns trigger
 language plpgsql
@@ -281,11 +286,9 @@ as $$
 begin
     if tg_op in ('DELETE', 'UPDATE') then
         perform public.water_manual_apply_day(old.account_number, old.reading_date);
-        perform public.water_manual_apply_day(old.account_number, old.reading_date + 1);
     end if;
     if tg_op in ('INSERT', 'UPDATE') then
         perform public.water_manual_apply_day(new.account_number, new.reading_date);
-        perform public.water_manual_apply_day(new.account_number, new.reading_date + 1);
     end if;
     return null;
 end;

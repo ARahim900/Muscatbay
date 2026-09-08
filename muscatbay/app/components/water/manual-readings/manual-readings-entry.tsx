@@ -3,9 +3,8 @@
 /**
  * Entry card — one date, every hand-read meter of a system.
  *
- * Columns: meter · previous index · today's index (typed) · derived consumption
- * · note. The consumption preview is today − yesterday and stays "—" until
- * both readings exist, exactly as the stored data will read. Inputs are only
+ * Columns: meter · the day's consumption (typed, m³) · note. A blank field
+ * means "not recorded" and is stored as no row — never as 0. Inputs are only
  * editable for operator / manager / admin; everyone else sees the same card
  * read-only with a caption saying why. The hard gate is Supabase RLS — the
  * Server Action returns its permission error verbatim.
@@ -22,7 +21,6 @@ import {
     deriveDay,
     indexReadings,
     parseReadingInput,
-    round3,
     type ManualReadingEntry,
 } from "@/functions/api/manual-readings";
 import type { ManualReading } from "@/entities/manual-readings";
@@ -36,20 +34,17 @@ const INPUT_CLASS =
 const EDITOR_ROLES = new Set(["admin", "manager", "operator"]);
 
 interface Draft {
-    reading: string;
+    value: string;
     note: string;
 }
 
-function initialDrafts(rows: { meter: ManualMeter; day: { reading: number | null; note: string | null } }[]): Record<string, Draft> {
+function initialDrafts(rows: { meter: ManualMeter; day: { consumption: number | null; note: string | null } }[]): Record<string, Draft> {
     const next: Record<string, Draft> = {};
     for (const { meter, day } of rows) {
-        next[meter.key] = { reading: day.reading === null ? "" : String(day.reading), note: day.note ?? "" };
+        next[meter.key] = { value: day.consumption === null ? "" : String(day.consumption), note: day.note ?? "" };
     }
     return next;
 }
-
-const m3 = (v: number | null): string =>
-    v === null ? "—" : v.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 
 export function ManualReadingsEntry({
     system, date, meters, readings, onSaved, description,
@@ -58,7 +53,7 @@ export function ManualReadingsEntry({
     /** ISO `YYYY-MM-DD` being entered. */
     date: string;
     meters: ManualMeter[];
-    /** Every reading loaded for the month (the day before `date` must be included). */
+    /** Every row loaded for the month. */
     readings: ManualReading[];
     /** Called after a successful save so the owner can refetch. */
     onSaved: () => void;
@@ -92,17 +87,17 @@ export function ManualReadingsEntry({
     const changed = rows.filter(({ meter, day }) => {
         const draft = drafts[meter.key];
         if (!draft) return false;
-        const stored = day.reading === null ? "" : String(day.reading);
-        return draft.reading.trim() !== stored || draft.note.trim() !== (day.note ?? "");
+        const stored = day.consumption === null ? "" : String(day.consumption);
+        return draft.value.trim() !== stored || draft.note.trim() !== (day.note ?? "");
     });
 
-    const invalid = rows.filter(({ meter }) => parseReadingInput(drafts[meter.key]?.reading ?? "") === undefined);
+    const invalid = rows.filter(({ meter }) => parseReadingInput(drafts[meter.key]?.value ?? "") === undefined);
 
     const save = () => {
         if (!canEdit || changed.length === 0 || invalid.length > 0) return;
         const entries: ManualReadingEntry[] = changed.map(({ meter }) => ({
             key: meter.key,
-            reading: parseReadingInput(drafts[meter.key].reading) ?? null,
+            consumption: parseReadingInput(drafts[meter.key].value) ?? null,
             note: drafts[meter.key].note,
         }));
         startTransition(async () => {
@@ -147,23 +142,16 @@ export function ManualReadingsEntry({
                         <thead>
                             <tr>
                                 <th scope="col" className={thBase}>Meter</th>
-                                <th scope="col" className={cn(thBase, "text-right")}>Previous (m³)</th>
-                                <th scope="col" className={cn(thBase, "text-right")}>Reading (m³)</th>
                                 <th scope="col" className={cn(thBase, "text-right")}>Consumption (m³)</th>
                                 <th scope="col" className={thBase}>Note</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map(({ meter, day }) => {
-                                const draft = drafts[meter.key] ?? { reading: "", note: "" };
-                                const typed = parseReadingInput(draft.reading);
-                                const preview =
-                                    typed === undefined ? null
-                                        : typed === null ? null
-                                            : day.previousReading === null ? null
-                                                : round3(typed - day.previousReading);
+                            {rows.map(({ meter }) => {
+                                const draft = drafts[meter.key] ?? { value: "", note: "" };
+                                const typed = parseReadingInput(draft.value);
                                 const isInvalid = typed === undefined;
-                                const isNegative = preview !== null && preview < 0;
+                                const isNegative = typeof typed === "number" && typed < 0;
                                 return (
                                     <tr key={meter.key} className="border-b border-line last:border-b-0 odd:bg-component/40">
                                         <td className={cn(tdBase, "min-w-48")}>
@@ -180,30 +168,26 @@ export function ManualReadingsEntry({
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className={cn(tdBase, "text-right tabular-nums text-muted")}>
-                                            {m3(day.previousReading)}
-                                        </td>
-                                        <td className={cn(tdBase, "w-40")}>
-                                            <input
-                                                type="text"
-                                                inputMode="decimal"
-                                                aria-label={`${meter.name} reading`}
-                                                aria-invalid={isInvalid || undefined}
-                                                placeholder="not read"
-                                                value={draft.reading}
-                                                disabled={!canEdit || pending}
-                                                onChange={(e) => setDraft(meter.key, { reading: e.target.value })}
-                                                className={cn(INPUT_CLASS, "text-right", isInvalid && "border-danger ring-2 ring-danger")}
-                                            />
-                                        </td>
-                                        <td className={cn(tdBase, "text-right tabular-nums", isNegative && "text-danger")}>
-                                            <span className="inline-flex items-center justify-end gap-1.5">
-                                                {isNegative && <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />}
-                                                {m3(preview)}
-                                            </span>
-                                            {preview === null && typed !== null && typed !== undefined && day.previousReading === null && (
-                                                <p className="text-caption text-muted">no reading the day before</p>
-                                            )}
+                                        <td className={cn(tdBase, "w-48")}>
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {isNegative && (
+                                                    <span className="inline-flex items-center gap-1 text-caption text-danger" title="Negative consumption — check the figure">
+                                                        <AlertTriangle size={14} strokeWidth={2} aria-hidden="true" />
+                                                        Negative
+                                                    </span>
+                                                )}
+                                                <input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    aria-label={`${meter.name} consumption`}
+                                                    aria-invalid={isInvalid || undefined}
+                                                    placeholder="not recorded"
+                                                    value={draft.value}
+                                                    disabled={!canEdit || pending}
+                                                    onChange={(e) => setDraft(meter.key, { value: e.target.value })}
+                                                    className={cn(INPUT_CLASS, "w-32 text-right", isInvalid && "border-danger ring-2 ring-danger")}
+                                                />
+                                            </div>
                                         </td>
                                         <td className={cn(tdBase, "min-w-48")}>
                                             <input
@@ -222,7 +206,7 @@ export function ManualReadingsEntry({
                             })}
                             {rows.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className={cn(tdBase, "py-6 text-center text-muted")}>
+                                    <td colSpan={3} className={cn(tdBase, "py-6 text-center text-muted")}>
                                         No meters are registered for this system.
                                     </td>
                                 </tr>
@@ -247,9 +231,9 @@ export function ManualReadingsEntry({
             </SectionCard.Body>
             <SectionCard.Footer tone={invalid.length > 0 ? "danger" : canEdit ? "neutral" : "info"}>
                 {invalid.length > 0
-                    ? "A reading must be a number with up to three decimals — clear the field to record “not read”."
+                    ? "A figure must be a number with up to three decimals — clear the field to record “not recorded”."
                     : canEdit
-                        ? "Enter the cumulative index shown on the meter, in m³. Consumption is today’s index minus yesterday’s; a blank field means the meter was not read."
+                        ? "Enter the day’s consumption for each meter in m³, as on the Kalhat sheet. A blank field means the meter was not recorded — it is never stored as 0."
                         : "Recording readings needs the operator role. Ask an administrator to change your role in Settings."}
             </SectionCard.Footer>
         </SectionCard>

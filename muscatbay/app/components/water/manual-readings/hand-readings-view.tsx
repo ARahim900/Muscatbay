@@ -11,10 +11,10 @@
  *                   derives each day's consumption into water_daily_consumption
  *                   so the Daily, Monthly, Satellite and dashboard views see it.
  *
- * Entry is per DAY: pick a date, type each meter's cumulative index, save.
- * Consumption is today − yesterday and stays "—" until both days exist.
- * The KPI row describes the selected day; the log below lists every day of
- * the month so a missed day is visible at a glance.
+ * Entry is per DAY: pick a date, type each meter's consumption for that day,
+ * save. A day with nothing recorded stays "—", never 0. The KPI row describes
+ * the selected day; the log below lists every day of the month so a missed
+ * day is visible at a glance.
  *
  * Reports its fetch / realtime state upward so the page keeps ONE status chip.
  */
@@ -70,7 +70,7 @@ function dayTotal(ledger: Ledger, keys: readonly string[], date: string): number
 /** "Month to date 1,234 m³ · 7 days" for a KPI subtitle; honest when nothing is derivable. */
 function mtdNote(ledger: Ledger, keys: readonly string[], label: string): string {
     const s = sumConsumption(ledger, keys);
-    if (s.daysCounted === 0) return `${label} · no consecutive readings yet`;
+    if (s.daysCounted === 0) return `${label} · nothing recorded yet`;
     return `${label} to date ${fmt(s.total)} m³ · ${s.daysCounted} day${s.daysCounted === 1 ? "" : "s"}${s.negatives ? ` · ${s.negatives} negative` : ""}`;
 }
 
@@ -140,7 +140,7 @@ function SystemPanel({
     }, [meters, system]);
 
     const kpis = useMemo<StatItem[]>(() => {
-        const readToday = ledger.filter((row) => row.days.find((d) => d.date === date)?.reading !== null).length;
+        const readToday = ledger.filter((row) => row.days.find((d) => d.date === date)?.consumption !== null).length;
         const names = system === "irrigation"
             ? { a: "Into main tank", b: "Main tank outlet", c: "Zone tanks & controllers" }
             : { a: "Main Bulk (NAMA)", b: "Zone bulks", c: "Central Park" };
@@ -164,9 +164,9 @@ function SystemPanel({
             tile("b", "primary"),
             tile("c", "info"),
             {
-                label: "Meters read",
+                label: "Meters recorded",
                 value: `${readToday} / ${meters.length}`,
-                subtitle: `${date} · a blank meter is "not read", never 0`,
+                subtitle: `${date} · a blank meter is "not recorded", never 0`,
                 icon: CalendarCheck,
                 variant: meters.length === 0 ? "primary" : readToday === meters.length ? "success" : readToday === 0 ? "danger" : "warning",
             },
@@ -237,8 +237,8 @@ function SystemPanel({
                     readings={readings}
                     onSaved={() => refetch(true)}
                     description={system === "irrigation"
-                        ? "Cumulative index of each irrigation meter on the selected day, m³"
-                        : "Kalhat's index of each bulk meter on the selected day, m³ — consumption feeds the daily table"}
+                        ? "Each irrigation meter's consumption on the selected day, m³"
+                        : "Each bulk meter's consumption on the selected day, m³ — copied into the daily table"}
                 />
             </SectionBoundary>
 
@@ -276,21 +276,21 @@ function SystemPanel({
                             </ChartFrame>
                         ) : (
                             <p className="text-body text-muted">
-                                No consecutive readings yet for {label}. The chart appears once two days in a row have been recorded.
+                                Nothing recorded yet for {label}. The chart appears once a day has been saved.
                             </p>
                         )}
                     </SectionCard.Body>
                     <SectionCard.Footer>
-                        Gaps in a line are days that could not be derived. Lines are not joined across gaps.
+                        Gaps in a line are days with nothing recorded. Lines are not joined across gaps.
                     </SectionCard.Footer>
                 </SectionCard>
             </SectionBoundary>
 
             {system === "potable" && (
                 <p className="text-caption text-muted">
-                    “Hand-read only” meters (Main Bulk, Zone 8, Central Park) are never reported by Grafana: the value derived here is
-                    their only daily figure and a correction always replaces it. For the other bulks the derived value fills an empty
-                    day only — an instrumented Grafana reading is never overwritten.
+                    “Hand-read only” meters (Main Bulk, Zone 8, Central Park) are never reported by Grafana: the figure recorded here is
+                    their only daily value and a correction always replaces it. For the other bulks the figure fills an empty day
+                    only — an instrumented Grafana reading is never overwritten.
                 </p>
             )}
         </>

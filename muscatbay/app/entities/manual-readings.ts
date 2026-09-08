@@ -7,9 +7,9 @@
  *   irrigation → `irrigation_meters` + `irrigation_daily_readings`
  *                (a separate network; consumption derived in the app)
  *
- * Both store the CUMULATIVE METER INDEX (m³) exactly as read off the dial.
- * Consumption for a day is today's index minus yesterday's, and is `null` when
- * either reading is absent — never 0.
+ * Both store the DAY'S CONSUMPTION (m³) exactly as Kalhat recorded it — the
+ * Kalhat sheets are day-by-day consumption, confirmed from the owner's file on
+ * 2026-09-08. A day with no row is "not recorded" and renders as "—", never 0.
  *
  * Types only, zero runtime — safe for `mobile/` and server code alike.
  * @module entities/manual-readings
@@ -33,8 +33,8 @@ export interface WaterManualReadingRow {
     account_number: string;
     /** ISO `YYYY-MM-DD`. */
     reading_date: string;
-    /** Postgres numeric — PostgREST serialises it as a string. */
-    reading: number | string;
+    /** The day's consumption, m³. Postgres numeric — PostgREST serialises it as a string. */
+    consumption: number | string;
     note: string | null;
     applied_consumption: number | string | null;
     updated_at: string;
@@ -55,7 +55,7 @@ export interface IrrigationReadingRow {
     id: number;
     meter_key: string;
     reading_date: string;
-    reading: number | string;
+    consumption: number | string;
     note: string | null;
     updated_at: string;
 }
@@ -81,13 +81,13 @@ export interface ManualReading {
     key: string;
     /** ISO `YYYY-MM-DD`. */
     date: string;
-    /** Cumulative meter index, m³. */
-    reading: number;
+    /** The day's consumption as recorded, m³. Negative values are kept and flagged. */
+    consumption: number;
     note: string | null;
     /**
-     * Potable only: the consumption the DB trigger wrote into
-     * `water_daily_consumption` for this date (`null` = nothing written, e.g.
-     * the previous day was not read, or a Grafana value already occupied the cell).
+     * Potable only: the value the DB trigger wrote into
+     * `water_daily_consumption` for this date (`null` = nothing written, e.g. a
+     * Grafana value already occupied the cell).
      */
     appliedConsumption: number | null;
 }

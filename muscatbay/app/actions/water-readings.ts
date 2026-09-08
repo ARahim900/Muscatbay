@@ -7,10 +7,9 @@
  * decides who may write: operator, manager and admin can; viewer and
  * contractor get a permission error back, which the form shows verbatim.
  *
- * One call saves one date for one system. A `null` reading clears that
+ * One call saves one date for one system. A `null` consumption clears that
  * meter's row for the date. For the potable system the database trigger then
- * derives the day's consumption into `water_daily_consumption` — nothing here
- * computes consumption.
+ * copies the day into `water_daily_consumption`.
  */
 
 import { getSupabaseServerClient } from '@/lib/supabase-server';
@@ -40,8 +39,8 @@ export async function saveManualReadingsAction(input: SaveManualReadingsInput): 
     try {
         const supabase = await getSupabaseServerClient();
 
-        const toWrite = input.entries.filter((e) => e.reading !== null);
-        const toClear = input.entries.filter((e) => e.reading === null);
+        const toWrite = input.entries.filter((e) => e.consumption !== null);
+        const toClear = input.entries.filter((e) => e.consumption === null);
 
         let saved = 0;
         let cleared = 0;
@@ -50,7 +49,7 @@ export async function saveManualReadingsAction(input: SaveManualReadingsInput): 
             const rows = toWrite.map((e) => ({
                 [tables.keyColumn]: e.key,
                 reading_date: input.date,
-                reading: e.reading,
+                consumption: e.consumption,
                 note: e.note && e.note.trim() !== '' ? e.note.trim() : null,
             }));
             const { error, count } = await supabase
