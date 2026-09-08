@@ -33,6 +33,10 @@ const INPUT_CLASS =
 
 const EDITOR_ROLES = new Set(["admin", "manager", "operator"]);
 
+/** The app-wide table body: 44 px rows, zebra on even rows — the same rule the
+ *  migrated Water Monthly ledgers use (`water-monthly-dashboard.tsx`). */
+const TBODY = "[&>tr]:h-11 [&>tr:nth-child(even)]:bg-component";
+
 interface Draft {
     value: string;
     note: string;
@@ -146,14 +150,14 @@ export function ManualReadingsEntry({
                                 <th scope="col" className={thBase}>Note</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className={TBODY}>
                             {rows.map(({ meter }) => {
                                 const draft = drafts[meter.key] ?? { value: "", note: "" };
                                 const typed = parseReadingInput(draft.value);
                                 const isInvalid = typed === undefined;
                                 const isNegative = typeof typed === "number" && typed < 0;
                                 return (
-                                    <tr key={meter.key} className="border-b border-line last:border-b-0 odd:bg-component/40">
+                                    <tr key={meter.key} className="border-b border-line last:border-b-0">
                                         <td className={cn(tdBase, "min-w-48")}>
                                             <div className="flex flex-col">
                                                 <span className="text-body text-fg">{meter.name}</span>

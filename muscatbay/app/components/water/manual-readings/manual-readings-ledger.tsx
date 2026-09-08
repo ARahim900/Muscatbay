@@ -16,6 +16,10 @@ import { thBase, tdBase } from "@/components/water/daily-report/inline-shared";
 import type { DerivedDay } from "@/functions/api/manual-readings";
 import type { ManualMeter } from "@/entities/manual-readings";
 
+/** The app-wide table body: 44 px rows, zebra on even rows — the same rule the
+ *  migrated Water Monthly ledgers use (`water-monthly-dashboard.tsx`). */
+const TBODY = "[&>tr]:h-11 [&>tr:nth-child(even)]:bg-component";
+
 const cell = (v: number | null): string =>
     v === null ? "—" : v.toLocaleString("en-GB", { maximumFractionDigits: 1 });
 
@@ -72,14 +76,14 @@ export function ManualReadingsLedger({
                                 <th scope="col" className={cn(thBase, "text-right")}>Month</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className={TBODY}>
                             {ledger.map(({ meter, days }) => {
                                 const derived = days.filter((d) => d.consumption !== null);
                                 const monthTotal = derived.length === 0
                                     ? null
                                     : derived.reduce((s, d) => s + (d.consumption ?? 0), 0);
                                 return (
-                                    <tr key={meter.key} className="border-b border-line last:border-b-0 odd:bg-component/40">
+                                    <tr key={meter.key} className="border-b border-line last:border-b-0">
                                         <th scope="row" className={cn(tdBase, "sticky left-0 z-10 whitespace-nowrap bg-card text-left font-medium")}>
                                             {meter.name}
                                         </th>

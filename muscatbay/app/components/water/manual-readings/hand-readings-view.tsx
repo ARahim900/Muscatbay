@@ -24,7 +24,9 @@ import {
     ArrowDownToLine, ArrowUpFromLine, CalendarCheck, Droplets, Gauge, MapPin, RefreshCw,
     Sprout, TrendingUp, Waves,
 } from "lucide-react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+    Area, AreaChart, CartesianGrid, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
 import { Button, ChartFrame, SectionCard, Tabs, chartTheme, type TabItem } from "@/components/ui";
 import { StatsGrid, type StatItem } from "@/components/shared/stats-grid";
 import { SectionBoundary } from "@/components/shared/section-boundary";
@@ -186,6 +188,21 @@ function SystemPanel({
     }, [ledger, groups, todayKey]);
     const hasTrend = trend.some((t) => t.a !== null || t.b !== null || t.c !== null);
 
+    // The leading series (main supply) carries the average line and the Max
+    // marker, as on the app's other trend charts. Both are computed over the
+    // RECORDED days only — a blank day is never treated as a zero.
+    const leadStats = useMemo(() => {
+        const recorded = trend.filter((t): t is typeof t & { a: number } => t.a !== null);
+        if (recorded.length === 0) return null;
+        const peak = recorded.reduce((best, t) => (t.a > best.a ? t : best), recorded[0]);
+        return {
+            avg: Math.round((recorded.reduce((sum, t) => sum + t.a, 0) / recorded.length) * 10) / 10,
+            days: recorded.length,
+            maxDay: peak.day,
+            maxValue: peak.a,
+        };
+    }, [trend]);
+
     const legend = system === "irrigation"
         ? [
             { label: "Into main tank", color: chartTheme.series[2] },
@@ -259,19 +276,78 @@ function SystemPanel({
                         {hasTrend ? (
                             <ChartFrame series={3} height="chart-lg" legend={legend}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={trend} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                                    <AreaChart data={trend} margin={{ top: 16, right: 28, left: 0, bottom: 0 }}>
+                                        {/* One gradient per series — the app-wide area treatment
+                                            (STP Load vs Recovery, Electricity consumption). */}
+                                        <defs>
+                                            {legend.map((l, i) => (
+                                                <linearGradient key={l.label} id={`hr-${system}-${i}`} x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor={l.color} stopOpacity={i === 0 ? 0.38 : 0.22} />
+                                                    <stop offset="95%" stopColor={l.color} stopOpacity={0} />
+                                                </linearGradient>
+                                            ))}
+                                        </defs>
                                         <CartesianGrid {...chartTheme.grid} />
                                         <XAxis dataKey="day" {...chartTheme.axis} interval={2} />
-                                        <YAxis {...chartTheme.axis} />
+                                        <YAxis
+                                            {...chartTheme.axis}
+                                            width={52}
+                                            tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v))}
+                                        />
                                         <Tooltip
                                             {...chartTheme.tooltip}
                                             labelFormatter={(d) => `Day ${d}`}
                                             formatter={(value) => (value === null || value === undefined ? "—" : `${Number(value).toLocaleString("en-GB", { maximumFractionDigits: 1 })} m³`)}
                                         />
-                                        <Line type="monotone" dataKey="a" name={legend[0].label} stroke={legend[0].color} {...chartTheme.line} connectNulls={false} />
-                                        <Line type="monotone" dataKey="b" name={legend[1].label} stroke={legend[1].color} {...chartTheme.line} connectNulls={false} />
-                                        <Line type="monotone" dataKey="c" name={legend[2].label} stroke={legend[2].color} {...chartTheme.line} connectNulls={false} />
-                                    </LineChart>
+                                        {(["a", "b", "c"] as const).map((key, i) => (
+                                            <Area
+                                                key={key}
+                                                type="natural"
+                                                dataKey={key}
+                                                name={legend[i].label}
+                                                stroke={legend[i].color}
+                                                fill={`url(#hr-${system}-${i})`}
+                                                strokeWidth={i === 0 ? 3 : 2}
+                                                connectNulls={false}
+                                                dot={false}
+                                                activeDot={{ r: 5, stroke: "var(--color-card)", strokeWidth: 2 }}
+                                            />
+                                        ))}
+                                        {/* Drawn after the areas so both sit above the fill. */}
+                                        {leadStats && (
+                                            <ReferenceLine
+                                                y={leadStats.avg}
+                                                stroke={chartTheme.target}
+                                                strokeDasharray="6 4"
+                                                strokeWidth={2}
+                                                ifOverflow="extendDomain"
+                                                label={{
+                                                    value: `Avg ${fmt(leadStats.avg)}`,
+                                                    position: "insideBottomRight",
+                                                    fill: "var(--color-muted)",
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
+                                                }}
+                                            />
+                                        )}
+                                        {leadStats && (
+                                            <ReferenceDot
+                                                x={leadStats.maxDay}
+                                                y={leadStats.maxValue}
+                                                r={4}
+                                                fill={legend[0].color}
+                                                stroke="var(--color-card)"
+                                                strokeWidth={2}
+                                                label={{
+                                                    value: "Max",
+                                                    position: "top",
+                                                    fill: "var(--color-muted)",
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
+                                                }}
+                                            />
+                                        )}
+                                    </AreaChart>
                                 </ResponsiveContainer>
                             </ChartFrame>
                         ) : (
@@ -281,7 +357,10 @@ function SystemPanel({
                         )}
                     </SectionCard.Body>
                     <SectionCard.Footer>
-                        Gaps in a line are days with nothing recorded. Lines are not joined across gaps.
+                        Gaps are days with nothing recorded — lines are not joined across them.
+                        {leadStats
+                            ? ` The dashed line is ${legend[0].label.toLowerCase()} averaged over its ${leadStats.days} recorded day${leadStats.days === 1 ? "" : "s"}, not over the whole month.`
+                            : ""}
                     </SectionCard.Footer>
                 </SectionCard>
             </SectionBoundary>
