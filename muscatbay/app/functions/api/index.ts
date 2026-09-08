@@ -27,6 +27,7 @@ export * from './contractors';
 export * from './electricity';
 export * from './stp';
 export * from './water';
+export * from './manual-readings';
 export * from './csv-upload';
 export * from './fire-safety';
 export * from './gulf-expert';
